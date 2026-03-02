@@ -247,13 +247,28 @@ async function main() {
         .optional()
         .describe("Number of discussion rounds (1-5). Defaults to 3."),
     },
-    async ({ question, models, rounds }) => {
+    async ({ question, models, rounds }, extra) => {
       try {
+        let step = 0;
+        const progressToken = extra._meta?.progressToken;
         const orchestrator = new DebateOrchestrator(config);
         const result = await orchestrator.discuss(
           question,
           models,
           rounds ?? 3,
+          async (event) => {
+            step++;
+            if (progressToken != null) {
+              await extra.sendNotification({
+                method: "notifications/progress",
+                params: {
+                  progressToken,
+                  progress: step,
+                  message: `[Phase ${event.phase}] ${event.message}`,
+                },
+              });
+            }
+          },
         );
         return {
           content: [

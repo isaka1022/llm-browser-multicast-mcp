@@ -30,6 +30,14 @@ function emptyUsage(): TokenUsage {
   return { inputTokens: 0, outputTokens: 0, estimated: false };
 }
 
+export interface DebateProgressEvent {
+  phase: number;
+  message: string;
+  detail?: string;
+}
+
+export type OnDebateProgress = (event: DebateProgressEvent) => void;
+
 export class DebateOrchestrator {
   private registry: ProviderRegistry;
 
@@ -41,13 +49,17 @@ export class DebateOrchestrator {
     topic: string,
     models?: string[],
     rounds = 3,
+    onProgress?: OnDebateProgress,
   ): Promise<DebateResult> {
     const participants = models ?? this.config.defaultModels;
     const chairmanModel = this.config.chairman;
     const totalStart = Date.now();
 
+    const emit = onProgress ?? (() => {});
+
     // Phase 1: Initial Stances (parallel)
     log.stage("Debate", `Phase 1: Collecting initial stances from ${participants.length} models...`);
+    emit({ phase: 1, message: `Collecting initial stances from ${participants.length} models...` });
     const stancePrompt = buildDebateStancePrompt(topic);
     const phase1Results = await this.registry.chatParallel(participants, [
       { role: "user", content: stancePrompt },
@@ -61,6 +73,7 @@ export class DebateOrchestrator {
           stance: result.response.content,
           usage: result.response.usage,
         });
+        emit({ phase: 1, message: `${result.response.model} stated their position`, detail: result.response.content });
       } else {
         log.error(`Debate Phase 1: ${result.error.model} failed: ${result.error.error}`);
       }
@@ -92,22 +105,29 @@ export class DebateOrchestrator {
 
     if (earlyConsensus) {
       log.stage("Debate", "Consensus detected — skipping to synthesis");
+      emit({ phase: 1, message: "Consensus detected — skipping to synthesis" });
     } else {
       // Phase 2: Discussion (sequential rounds)
       log.stage("Debate", `Phase 2: Discussion (${rounds} rounds)...`);
-      discussionTurns = await this.runDiscussion(topic, initialStances, participants, rounds);
+      emit({ phase: 2, message: `Starting discussion (${rounds} rounds)...` });
+      discussionTurns = await this.runDiscussion(topic, initialStances, participants, rounds, emit);
       phase2Usage = sumTokenUsage(discussionTurns.map((t) => t.usage));
       log.stage("Debate", `Phase 2 complete: ${discussionTurns.length} turns`);
 
       // Phase 3: Final Stances (parallel)
       log.stage("Debate", "Phase 3: Collecting final stances...");
+      emit({ phase: 3, message: "Collecting final stances..." });
       finalStances = await this.collectFinalStances(topic, initialStances, discussionTurns, participants);
       phase3Usage = sumTokenUsage(finalStances.map((s) => s.usage));
+      for (const s of finalStances) {
+        emit({ phase: 3, message: `${s.model} restated their position`, detail: s.stance });
+      }
       log.stage("Debate", `Phase 3 complete: ${finalStances.length} final stances`);
     }
 
     // Phase 4: Synthesis
     log.stage("Debate", `Phase 4: Chairman synthesis (${chairmanModel})...`);
+    emit({ phase: 4, message: `Chairman (${chairmanModel}) synthesizing...` });
     const synthesisPrompt = buildDebateSynthesisPrompt(
       topic,
       initialStances,
@@ -122,6 +142,7 @@ export class DebateOrchestrator {
     const phase4Usage = synthesis.usage ?? emptyUsage();
 
     log.stage("Debate", "Complete.");
+    emit({ phase: 4, message: "Synthesis complete", detail: synthesis.content });
 
     const totalUsage = sumTokenUsage([phase1TotalUsage, phase2Usage, phase3Usage, phase4Usage]);
 
@@ -152,6 +173,7 @@ export class DebateOrchestrator {
     initialStances: DebateStance[],
     participants: string[],
     rounds: number,
+    emit: (event: DebateProgressEvent) => void,
   ): Promise<DebateDiscussionTurn[]> {
     const allTurns: DebateDiscussionTurn[] = [];
 
@@ -183,6 +205,7 @@ export class DebateOrchestrator {
             response: result.content,
             usage: result.usage,
           });
+          emit({ phase: 2, message: `Round ${round}: ${result.model} responded`, detail: result.content });
         } catch (err) {
           log.error(
             `Debate: ${modelId} failed in round ${round}: ${err instanceof Error ? err.message : err}`,
