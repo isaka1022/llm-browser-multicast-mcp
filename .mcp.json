@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "llm-council": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/index.js"],
+      "cwd": "/Users/amane/projects/ai-master"
+    }
+  }
+}

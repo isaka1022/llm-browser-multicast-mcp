@@ -1,0 +1,38 @@
+{
+  "providers": {
+    "ollama": {
+      "type": "ollama",
+      "baseUrl": "http://localhost:11434",
+      "models": ["qwen2.5:latest", "phi4:14b", "llama3:8b", "nemotron-3-nano:latest"]
+    },
+    "gemini": {
+      "type": "gemini-api",
+      "apiKey": "${GEMINI_API_KEY}",
+      "models": ["gemini-2.5-flash", "gemini-2.5-pro"]
+    },
+    "grok": {
+      "type": "grok-api",
+      "apiKey": "${XAI_API_KEY}",
+      "models": ["grok-3-fast"]
+    },
+    "gemini-cli": {
+      "type": "gemini-cli",
+      "models": ["default"]
+    },
+    "codex-cli": {
+      "type": "codex-cli",
+      "models": ["default"]
+    },
+    "claude-cli": {
+      "type": "claude-cli",
+      "models": ["default"]
+    }
+  },
+  "defaultModels": [
+    "ollama/qwen2.5:latest",
+    "ollama/phi4:14b",
+    "ollama/llama3:8b"
+  ],
+  "chairman": "ollama/qwen2.5:latest",
+  "timeoutMs": 120000
+}
