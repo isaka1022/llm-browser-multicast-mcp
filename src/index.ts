@@ -4,8 +4,9 @@ import { z } from "zod/v4";
 import { loadConfig } from "./config.js";
 import { CouncilOrchestrator } from "./orchestrator/council.js";
 import { RoundtableOrchestrator } from "./orchestrator/roundtable.js";
+import { DebateOrchestrator } from "./orchestrator/debate.js";
 import { ProviderRegistry } from "./providers/registry.js";
-import type { CouncilResult, RoundtableResult } from "./types.js";
+import type { CouncilResult, RoundtableResult, DebateResult } from "./types.js";
 import { log } from "./logger.js";
 
 function formatCouncilResult(result: CouncilResult): string {
@@ -66,6 +67,69 @@ function formatRoundtableResult(result: RoundtableResult): string {
   lines.push("");
 
   lines.push(`---\n*Total time: ${(result.metadata.totalDurationMs / 1000).toFixed(1)}s*`);
+
+  return lines.join("\n");
+}
+
+function formatDebateResult(result: DebateResult): string {
+  const lines: string[] = [];
+
+  lines.push(`# Debate\n`);
+  lines.push(`**Topic:** ${result.question}\n`);
+  lines.push(`**Participants:** ${result.metadata.models.join(", ")}\n`);
+
+  // Phase 1
+  lines.push(`## Phase 1: Initial Stances\n`);
+  for (const stance of result.phase1) {
+    lines.push(`### ${stance.model}\n`);
+    lines.push(stance.stance);
+    lines.push("");
+  }
+
+  if (result.metadata.earlyConsensus) {
+    lines.push(`> **Early Consensus:** All participants were in substantial agreement. Discussion phase was skipped.\n`);
+  } else {
+    // Phase 2
+    lines.push(`## Phase 2: Discussion (${result.metadata.totalRounds} rounds)\n`);
+    for (let r = 1; r <= result.metadata.totalRounds; r++) {
+      const roundTurns = result.phase2.filter((t) => t.round === r);
+      if (roundTurns.length > 0) {
+        lines.push(`### Round ${r}\n`);
+        for (const turn of roundTurns) {
+          lines.push(`#### ${turn.model}\n`);
+          lines.push(turn.response);
+          lines.push("");
+        }
+      }
+    }
+
+    // Phase 3
+    lines.push(`## Phase 3: Final Stances\n`);
+    for (const stance of result.phase3) {
+      lines.push(`### ${stance.model}\n`);
+      lines.push(stance.stance);
+      lines.push("");
+    }
+  }
+
+  // Phase 4
+  lines.push(`## Phase 4: Synthesis\n`);
+  lines.push(`*Synthesized by ${result.phase4.model}*\n`);
+  lines.push(result.phase4.content);
+  lines.push("");
+
+  // Token usage summary
+  const usage = result.metadata.tokenUsage;
+  lines.push(`---`);
+  lines.push(`*Total time: ${(result.metadata.totalDurationMs / 1000).toFixed(1)}s*\n`);
+  lines.push(`### Token Usage${usage.total.estimated ? " (includes estimates)" : ""}`);
+  lines.push(`| Phase | Input | Output | Total |`);
+  lines.push(`|-------|-------|--------|-------|`);
+  lines.push(`| Phase 1 | ${usage.phase1.inputTokens} | ${usage.phase1.outputTokens} | ${usage.phase1.inputTokens + usage.phase1.outputTokens} |`);
+  lines.push(`| Phase 2 | ${usage.phase2.inputTokens} | ${usage.phase2.outputTokens} | ${usage.phase2.inputTokens + usage.phase2.outputTokens} |`);
+  lines.push(`| Phase 3 | ${usage.phase3.inputTokens} | ${usage.phase3.outputTokens} | ${usage.phase3.inputTokens + usage.phase3.outputTokens} |`);
+  lines.push(`| Phase 4 | ${usage.phase4.inputTokens} | ${usage.phase4.outputTokens} | ${usage.phase4.inputTokens + usage.phase4.outputTokens} |`);
+  lines.push(`| **Total** | **${usage.total.inputTokens}** | **${usage.total.outputTokens}** | **${usage.total.inputTokens + usage.total.outputTokens}** |`);
 
   return lines.join("\n");
 }
@@ -155,6 +219,53 @@ async function main() {
             {
               type: "text" as const,
               text: `Roundtable error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // Tool: debate_discuss
+  server.tool(
+    "debate_discuss",
+    "Run a structured debate: models state positions, discuss in rounds, restate final positions, then a chairman synthesizes points of agreement and disagreement.",
+    {
+      question: z.string().describe("The question or topic to debate"),
+      models: z
+        .array(z.string())
+        .optional()
+        .describe(
+          'Model IDs to participate (format: "provider/model"). Defaults to config.',
+        ),
+      rounds: z
+        .number()
+        .int()
+        .min(1)
+        .max(5)
+        .optional()
+        .describe("Number of discussion rounds (1-5). Defaults to 3."),
+    },
+    async ({ question, models, rounds }) => {
+      try {
+        const orchestrator = new DebateOrchestrator(config);
+        const result = await orchestrator.discuss(
+          question,
+          models,
+          rounds ?? 3,
+        );
+        return {
+          content: [
+            { type: "text" as const, text: formatDebateResult(result) },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Debate error: ${err instanceof Error ? err.message : String(err)}`,
             },
           ],
           isError: true,
