@@ -1,4 +1,4 @@
-import type { ChatMessage, ModelResponse } from "../types.js";
+import type { ChatMessage, ModelResponse, TokenUsage } from "../types.js";
 
 export interface LLMProvider {
   chat(model: string, messages: ChatMessage[], timeoutMs: number): Promise<ModelResponse>;
@@ -11,6 +11,10 @@ interface OpenAICompletionResponse {
       content: string;
     };
   }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+  };
 }
 
 export class OpenAICompatibleProvider implements LLMProvider {
@@ -49,10 +53,19 @@ export class OpenAICompatibleProvider implements LLMProvider {
       throw new Error(`${this.providerName}: empty response`);
     }
 
+    const usage: TokenUsage | undefined = data.usage
+      ? {
+          inputTokens: data.usage.prompt_tokens,
+          outputTokens: data.usage.completion_tokens,
+          estimated: false,
+        }
+      : undefined;
+
     return {
       model: `${this.providerName}/${model}`,
       content,
       durationMs: Date.now() - start,
+      usage,
     };
   }
 

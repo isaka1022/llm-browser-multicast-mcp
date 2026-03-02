@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import type { ChatMessage, ModelResponse } from "../types.js";
+import type { ChatMessage, ModelResponse, TokenUsage } from "../types.js";
 import type { LLMProvider } from "./base.js";
 import { log } from "../logger.js";
 
@@ -97,10 +97,17 @@ export class CLIProvider implements LLMProvider {
       throw new Error(`${this.options.name}: empty response`);
     }
 
+    const usage: TokenUsage = {
+      inputTokens: Math.ceil(prompt.length / 4),
+      outputTokens: Math.ceil(content.length / 4),
+      estimated: true,
+    };
+
     return {
       model: `${this.options.name}/${model}`,
       content,
       durationMs: Date.now() - start,
+      usage,
     };
   }
 

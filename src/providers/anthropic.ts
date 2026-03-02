@@ -1,8 +1,12 @@
-import type { ChatMessage, ModelResponse } from "../types.js";
+import type { ChatMessage, ModelResponse, TokenUsage } from "../types.js";
 import type { LLMProvider } from "./base.js";
 
 interface AnthropicMessage {
   content: Array<{ type: string; text: string }>;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
 
 export class AnthropicProvider implements LLMProvider {
@@ -55,10 +59,19 @@ export class AnthropicProvider implements LLMProvider {
       throw new Error("Anthropic: no text content in response");
     }
 
+    const usage: TokenUsage | undefined = data.usage
+      ? {
+          inputTokens: data.usage.input_tokens,
+          outputTokens: data.usage.output_tokens,
+          estimated: false,
+        }
+      : undefined;
+
     return {
       model: `anthropic/${model}`,
       content: textBlock.text,
       durationMs: Date.now() - start,
+      usage,
     };
   }
 

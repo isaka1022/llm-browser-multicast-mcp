@@ -1,4 +1,4 @@
-import type { ChatMessage, ModelResponse } from "../types.js";
+import type { ChatMessage, ModelResponse, TokenUsage } from "../types.js";
 import type { LLMProvider } from "./base.js";
 
 interface OllamaModel {
@@ -9,6 +9,8 @@ interface OllamaChatResponse {
   message: {
     content: string;
   };
+  prompt_eval_count?: number;
+  eval_count?: number;
 }
 
 export class OllamaProvider implements LLMProvider {
@@ -33,10 +35,21 @@ export class OllamaProvider implements LLMProvider {
     }
 
     const data = (await response.json()) as OllamaChatResponse;
+
+    const usage: TokenUsage | undefined =
+      data.prompt_eval_count != null || data.eval_count != null
+        ? {
+            inputTokens: data.prompt_eval_count ?? 0,
+            outputTokens: data.eval_count ?? 0,
+            estimated: false,
+          }
+        : undefined;
+
     return {
       model: `ollama/${model}`,
       content: data.message.content,
       durationMs: Date.now() - start,
+      usage,
     };
   }
 

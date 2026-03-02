@@ -3,10 +3,17 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimated: boolean;
+}
+
 export interface ModelResponse {
   model: string;
   content: string;
   durationMs: number;
+  usage?: TokenUsage;
 }
 
 export interface ModelError {
@@ -80,4 +87,39 @@ export interface CouncilConfig {
   defaultModels: string[];
   chairman: string;
   timeoutMs: number;
+}
+
+// Debate types
+export interface DebateStance {
+  model: string;
+  stance: string;
+  usage?: TokenUsage;
+}
+
+export interface DebateDiscussionTurn {
+  model: string;
+  round: number;
+  response: string;
+  usage?: TokenUsage;
+}
+
+export interface DebateResult {
+  question: string;
+  phase1: DebateStance[];
+  phase2: DebateDiscussionTurn[];
+  phase3: DebateStance[];
+  phase4: ModelResponse;
+  metadata: {
+    models: string[];
+    totalRounds: number;
+    earlyConsensus: boolean;
+    totalDurationMs: number;
+    tokenUsage: {
+      phase1: TokenUsage;
+      phase2: TokenUsage;
+      phase3: TokenUsage;
+      phase4: TokenUsage;
+      total: TokenUsage;
+    };
+  };
 }
