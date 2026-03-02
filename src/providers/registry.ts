@@ -1,9 +1,9 @@
 import type { CouncilConfig, ChatMessage, ModelResponse, ModelResult } from "../types.js";
 import type { LLMProvider } from "./base.js";
 import { OpenAICompatibleProvider } from "./base.js";
-import { OllamaProvider } from "./ollama.js";
 import { AnthropicProvider } from "./anthropic.js";
 import { createGeminiCLI, createCodexCLI, createClaudeCLI } from "./cli.js";
+import { log } from "../logger.js";
 
 export class ProviderRegistry {
   private providers = new Map<string, LLMProvider>();
@@ -17,12 +17,6 @@ export class ProviderRegistry {
       this.config.providers,
     )) {
       switch (providerConfig.type) {
-        case "ollama":
-          this.providers.set(
-            name,
-            new OllamaProvider(providerConfig.baseUrl ?? "http://localhost:11434"),
-          );
-          break;
         case "anthropic":
           this.providers.set(
             name,
@@ -135,8 +129,11 @@ export class ProviderRegistry {
 
   async listAllModels(): Promise<string[]> {
     const allModels: string[] = [];
-    for (const provider of this.providers.values()) {
-      const models = await provider.listModels().catch(() => []);
+    for (const [name, provider] of this.providers.entries()) {
+      const models = await provider.listModels().catch((err) => {
+        log.error(`Failed to list models from provider "${name}": ${err instanceof Error ? err.message : String(err)}`);
+        return [];
+      });
       allModels.push(...models);
     }
     return allModels;

@@ -1,27 +1,65 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { CouncilConfig } from "./types.js";
+import { z } from "zod/v4";
+import type { CouncilConfig, ProviderType } from "./types.js";
+import { log } from "./logger.js";
+
+const PROVIDER_TYPES: ProviderType[] = [
+  "openai-compatible",
+  "anthropic",
+  "gemini-api",
+  "grok-api",
+  "gemini-cli",
+  "codex-cli",
+  "claude-cli",
+];
+
+const ProviderConfigSchema = z.object({
+  type: z.enum(PROVIDER_TYPES as [ProviderType, ...ProviderType[]]),
+  baseUrl: z.string().optional(),
+  apiKey: z.string().optional(),
+  models: z.array(z.string()),
+});
+
+const CouncilConfigSchema = z.object({
+  providers: z.record(z.string(), ProviderConfigSchema),
+  defaultModels: z.array(z.string()),
+  chairman: z.string(),
+  timeoutMs: z.number().positive(),
+});
 
 const DEFAULT_CONFIG: CouncilConfig = {
   providers: {
-    ollama: {
-      type: "ollama",
-      baseUrl: "http://localhost:11434",
-      models: ["qwen2.5:latest", "phi4:14b", "llama3:8b"],
+    "gemini-cli": {
+      type: "gemini-cli",
+      models: ["default"],
+    },
+    "claude-cli": {
+      type: "claude-cli",
+      models: ["default"],
+    },
+    "codex-cli": {
+      type: "codex-cli",
+      models: ["default"],
     },
   },
   defaultModels: [
-    "ollama/qwen2.5:latest",
-    "ollama/phi4:14b",
-    "ollama/llama3:8b",
+    "gemini-cli/default",
+    "claude-cli/default",
+    "codex-cli/default",
   ],
-  chairman: "ollama/qwen2.5:latest",
-  timeoutMs: 120_000,
+  chairman: "gemini-cli/default",
+  timeoutMs: 300_000,
 };
 
 function resolveEnvVars(value: string): string {
   return value.replace(/\$\{(\w+)\}/g, (_, envName: string) => {
-    return process.env[envName] ?? "";
+    const resolved = process.env[envName];
+    if (resolved === undefined) {
+      log.error(`Environment variable ${envName} is not defined`);
+      return "";
+    }
+    return resolved;
   });
 }
 
@@ -41,10 +79,14 @@ export async function loadConfig(): Promise<CouncilConfig> {
   const configPath = resolve(process.cwd(), "council.config.json");
   try {
     const raw = await readFile(configPath, "utf-8");
-    const userConfig = JSON.parse(raw) as Partial<CouncilConfig>;
-    const merged = { ...DEFAULT_CONFIG, ...userConfig };
+    const parsed = JSON.parse(raw) as unknown;
+    const userConfig = CouncilConfigSchema.partial().parse(parsed);
+    const merged: CouncilConfig = { ...DEFAULT_CONFIG, ...userConfig } as CouncilConfig;
     return resolveConfigEnvVars(merged);
-  } catch {
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      log.error(`Invalid config: ${err.issues.map((i) => i.message).join(", ")}`);
+    }
     return DEFAULT_CONFIG;
   }
 }

@@ -1,10 +1,5 @@
 {
   "providers": {
-    "ollama": {
-      "type": "ollama",
-      "baseUrl": "http://localhost:11434",
-      "models": ["qwen2.5:latest", "phi4:14b", "llama3:8b", "nemotron-3-nano:latest"]
-    },
     "gemini": {
       "type": "gemini-api",
       "apiKey": "${GEMINI_API_KEY}",
@@ -29,10 +24,10 @@
     }
   },
   "defaultModels": [
-    "ollama/qwen2.5:latest",
-    "ollama/phi4:14b",
-    "ollama/llama3:8b"
+    "gemini-cli/default",
+    "claude-cli/default",
+    "codex-cli/default"
   ],
-  "chairman": "ollama/qwen2.5:latest",
-  "timeoutMs": 120000
+  "chairman": "gemini-cli/default",
+  "timeoutMs": 300000
 }

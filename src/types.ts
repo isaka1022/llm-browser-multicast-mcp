@@ -66,7 +66,6 @@ export interface RoundtableResult {
 }
 
 export type ProviderType =
-  | "ollama"
   | "openai-compatible"
   | "anthropic"
   | "gemini-api"
