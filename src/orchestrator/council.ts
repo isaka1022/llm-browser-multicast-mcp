@@ -7,6 +7,7 @@ import type {
 } from "../types.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { log } from "../logger.js";
+import type { EventLogger } from "../event-logger.js";
 import {
   buildRankingPrompt,
   buildSynthesisPrompt,
@@ -25,13 +26,21 @@ export class CouncilOrchestrator {
     question: string,
     models?: string[],
     chairman?: string,
+    eventLogger?: EventLogger,
   ): Promise<CouncilResult> {
     const councilModels = models ?? this.config.defaultModels;
     const chairmanModel = chairman ?? this.config.chairman;
     const totalStart = Date.now();
+    const emit = eventLogger ? (e: Parameters<EventLogger["emit"]>[0]) => eventLogger.emit(e) : () => {};
+
+    emit({ type: "session_start", discussionType: "council", question, models: councilModels, chairman: chairmanModel, timestamp: new Date().toISOString() });
 
     // Stage 1: Collect opinions in parallel
     log.stage("Council",`Stage 1: Querying ${councilModels.length} models...`);
+    emit({ type: "phase_start", phase: "stage1", label: "Individual Opinions" });
+    for (const m of councilModels) {
+      emit({ type: "model_thinking", phase: "stage1", model: m });
+    }
     const stage1Results = await this.registry.chatParallel(councilModels, [
       { role: "user", content: question },
     ]);
@@ -41,8 +50,10 @@ export class CouncilOrchestrator {
     for (const result of stage1Results) {
       if (result.status === "success") {
         successfulResponses.push(result.response);
+        emit({ type: "model_response", phase: "stage1", model: result.response.model, content: result.response.content, durationMs: result.response.durationMs });
       } else {
         errors.push(`${result.error.model}: ${result.error.error}`);
+        emit({ type: "model_error", phase: "stage1", model: result.error.model, error: result.error.error });
       }
     }
 
@@ -62,6 +73,7 @@ export class CouncilOrchestrator {
 
     // Stage 2: Peer review & ranking in parallel
     log.stage("Council",`Stage 2: Peer review...`);
+    emit({ type: "phase_start", phase: "stage2", label: "Peer Review & Ranking" });
     const rankingPrompt = buildRankingPrompt(
       question,
       successfulResponses,
@@ -83,6 +95,7 @@ export class CouncilOrchestrator {
           evaluation: result.response.content,
           parsedRanking: parseRanking(result.response.content, labels),
         });
+        emit({ type: "ranking", model: result.response.model, evaluation: result.response.content, parsedRanking: parseRanking(result.response.content, labels) });
       }
     }
 
@@ -95,9 +108,12 @@ export class CouncilOrchestrator {
       rankings,
       labelToModel,
     );
+    emit({ type: "aggregate_rankings", rankings: aggregateRankings, labelToModel });
 
     // Stage 3: Chairman synthesis
     log.stage("Council",`Stage 3: Chairman synthesis (${chairmanModel})...`);
+    emit({ type: "phase_start", phase: "stage3", label: "Chairman Synthesis" });
+    emit({ type: "model_thinking", phase: "stage3", model: chairmanModel });
     const synthesisPrompt = buildSynthesisPrompt(
       question,
       successfulResponses,
@@ -109,7 +125,12 @@ export class CouncilOrchestrator {
       { role: "user", content: synthesisPrompt },
     ]);
 
+    emit({ type: "synthesis", model: synthesis.model, content: synthesis.content, durationMs: synthesis.durationMs });
+
     log.stage("Council",`Complete.`);
+
+    const totalDurationMs = Date.now() - totalStart;
+    emit({ type: "session_end", totalDurationMs });
 
     return {
       question,
@@ -119,7 +140,7 @@ export class CouncilOrchestrator {
       metadata: {
         labelToModel,
         aggregateRankings,
-        totalDurationMs: Date.now() - totalStart,
+        totalDurationMs,
       },
     };
   }

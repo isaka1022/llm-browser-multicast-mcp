@@ -1,13 +1,13 @@
 {
-  "name": "llm-council-mcp",
+  "name": "llm-council",
   "version": "0.1.0",
-  "description": "LLM Council MCP Server - Multi-model discussion orchestrator",
+  "description": "Multi-LLM council discussion MCP server",
   "type": "module",
-  "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "viewer": "tsx src/viewer/server.ts"
   },
   "keywords": [
     "mcp",
@@ -18,6 +18,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "playwright": "^1.58.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {

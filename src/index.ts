@@ -8,6 +8,7 @@ import { DebateOrchestrator } from "./orchestrator/debate.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { formatCouncilResult, formatRoundtableResult, formatDebateResult } from "./formatters.js";
 import { log } from "./logger.js";
+import { EventLogger } from "./event-logger.js";
 
 async function main() {
   const config = await loadConfig();
@@ -36,8 +37,9 @@ async function main() {
     },
     async ({ question, models, chairman }) => {
       try {
+        const eventLogger = new EventLogger();
         const orchestrator = new CouncilOrchestrator(config);
-        const result = await orchestrator.discuss(question, models, chairman);
+        const result = await orchestrator.discuss(question, models, chairman, eventLogger);
         return {
           content: [{ type: "text" as const, text: formatCouncilResult(result) }],
         };
@@ -77,11 +79,13 @@ async function main() {
     },
     async ({ question, models, rounds }) => {
       try {
+        const eventLogger = new EventLogger();
         const orchestrator = new RoundtableOrchestrator(config);
         const result = await orchestrator.discuss(
           question,
           models,
           rounds ?? 2,
+          eventLogger,
         );
         return {
           content: [
@@ -126,6 +130,7 @@ async function main() {
       try {
         let step = 0;
         const progressToken = extra._meta?.progressToken;
+        const eventLogger = new EventLogger();
         const orchestrator = new DebateOrchestrator(config);
         const result = await orchestrator.discuss(
           question,
@@ -144,6 +149,7 @@ async function main() {
               });
             }
           },
+          eventLogger,
         );
         return {
           content: [

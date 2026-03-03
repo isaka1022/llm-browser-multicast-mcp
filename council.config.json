@@ -21,6 +21,11 @@
     "claude-cli": {
       "type": "claude-cli",
       "models": ["default"]
+    },
+    "chatgpt": {
+      "type": "chatgpt-web",
+      "headless": false,
+      "models": ["gpt-4o", "gpt-4o-mini"]
     }
   },
   "defaultModels": [

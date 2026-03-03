@@ -66,19 +66,23 @@ export interface RoundtableResult {
 }
 
 export type ProviderType =
-  | "openai-compatible"
   | "anthropic"
   | "gemini-api"
   | "grok-api"
   | "gemini-cli"
   | "codex-cli"
-  | "claude-cli";
+  | "claude-cli"
+  | "chatgpt-web";
 
 export interface ProviderConfig {
   type: ProviderType;
   baseUrl?: string;
   apiKey?: string;
   models: string[];
+  // Playwright provider options
+  service?: "chatgpt";
+  storageStatePath?: string;
+  headless?: boolean;
 }
 
 export interface CouncilConfig {

@@ -3,6 +3,7 @@ import type { LLMProvider } from "./base.js";
 import { OpenAICompatibleProvider } from "./base.js";
 import { AnthropicProvider } from "./anthropic.js";
 import { createGeminiCLI, createCodexCLI, createClaudeCLI } from "./cli.js";
+import { PlaywrightProvider } from "./playwright/playwright-provider.js";
 import { log } from "../logger.js";
 
 export class ProviderRegistry {
@@ -23,18 +24,6 @@ export class ProviderRegistry {
             new AnthropicProvider(
               providerConfig.apiKey ?? "",
               providerConfig.baseUrl,
-            ),
-          );
-          break;
-        case "openai-compatible":
-          this.providers.set(
-            name,
-            new OpenAICompatibleProvider(
-              name,
-              providerConfig.baseUrl ?? "https://api.openai.com",
-              {
-                Authorization: `Bearer ${providerConfig.apiKey ?? ""}`,
-              },
             ),
           );
           break;
@@ -71,6 +60,16 @@ export class ProviderRegistry {
           break;
         case "claude-cli":
           this.providers.set(name, createClaudeCLI());
+          break;
+        case "chatgpt-web":
+          this.providers.set(
+            name,
+            new PlaywrightProvider({
+              service: providerConfig.service ?? "chatgpt",
+              storageStatePath: providerConfig.storageStatePath,
+              headless: providerConfig.headless,
+            }),
+          );
           break;
       }
     }

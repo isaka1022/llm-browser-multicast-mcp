@@ -7,6 +7,7 @@ import type {
 } from "../types.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { log } from "../logger.js";
+import type { EventLogger } from "../event-logger.js";
 import {
   buildDebateStancePrompt,
   buildDebateAgreementCheckPrompt,
@@ -50,16 +51,24 @@ export class DebateOrchestrator {
     models?: string[],
     rounds = 3,
     onProgress?: OnDebateProgress,
+    eventLogger?: EventLogger,
   ): Promise<DebateResult> {
     const participants = models ?? this.config.defaultModels;
     const chairmanModel = this.config.chairman;
     const totalStart = Date.now();
 
     const emit = onProgress ?? (() => {});
+    const emitEvent = eventLogger ? (e: Parameters<EventLogger["emit"]>[0]) => eventLogger.emit(e) : () => {};
+
+    emitEvent({ type: "session_start", discussionType: "debate", question: topic, models: participants, chairman: chairmanModel, timestamp: new Date().toISOString() });
 
     // Phase 1: Initial Stances (parallel)
     log.stage("Debate", `Phase 1: Collecting initial stances from ${participants.length} models...`);
     emit({ phase: 1, message: `Collecting initial stances from ${participants.length} models...` });
+    emitEvent({ type: "phase_start", phase: "phase1", label: "Initial Stances" });
+    for (const m of participants) {
+      emitEvent({ type: "model_thinking", phase: "phase1", model: m });
+    }
     const stancePrompt = buildDebateStancePrompt(topic);
     const phase1Results = await this.registry.chatParallel(participants, [
       { role: "user", content: stancePrompt },
@@ -74,8 +83,10 @@ export class DebateOrchestrator {
           usage: result.response.usage,
         });
         emit({ phase: 1, message: `${result.response.model} stated their position`, detail: result.response.content });
+        emitEvent({ type: "model_response", phase: "phase1", model: result.response.model, content: result.response.content, durationMs: result.response.durationMs });
       } else {
         log.error(`Debate Phase 1: ${result.error.model} failed: ${result.error.error}`);
+        emitEvent({ type: "model_error", phase: "phase1", model: result.error.model, error: result.error.error });
       }
     }
 
@@ -97,6 +108,7 @@ export class DebateOrchestrator {
 
     const phase1TotalUsage = sumTokenUsage([phase1Usage, agreementCheck.usage]);
     const earlyConsensus = /VERDICT:\s*AGREE/i.test(agreementCheck.content);
+    emitEvent({ type: "consensus_check", result: earlyConsensus });
 
     let discussionTurns: DebateDiscussionTurn[] = [];
     let finalStances: DebateStance[] = [];
@@ -110,17 +122,23 @@ export class DebateOrchestrator {
       // Phase 2: Discussion (sequential rounds)
       log.stage("Debate", `Phase 2: Discussion (${rounds} rounds)...`);
       emit({ phase: 2, message: `Starting discussion (${rounds} rounds)...` });
-      discussionTurns = await this.runDiscussion(topic, initialStances, participants, rounds, emit);
+      emitEvent({ type: "phase_start", phase: "phase2", label: "Discussion" });
+      discussionTurns = await this.runDiscussion(topic, initialStances, participants, rounds, emit, emitEvent);
       phase2Usage = sumTokenUsage(discussionTurns.map((t) => t.usage));
       log.stage("Debate", `Phase 2 complete: ${discussionTurns.length} turns`);
 
       // Phase 3: Final Stances (parallel)
       log.stage("Debate", "Phase 3: Collecting final stances...");
       emit({ phase: 3, message: "Collecting final stances..." });
+      emitEvent({ type: "phase_start", phase: "phase3", label: "Final Stances" });
+      for (const m of participants) {
+        emitEvent({ type: "model_thinking", phase: "phase3", model: m });
+      }
       finalStances = await this.collectFinalStances(topic, initialStances, discussionTurns, participants);
       phase3Usage = sumTokenUsage(finalStances.map((s) => s.usage));
       for (const s of finalStances) {
         emit({ phase: 3, message: `${s.model} restated their position`, detail: s.stance });
+        emitEvent({ type: "model_response", phase: "phase3", model: s.model, content: s.stance, durationMs: 0 });
       }
       log.stage("Debate", `Phase 3 complete: ${finalStances.length} final stances`);
     }
@@ -128,6 +146,8 @@ export class DebateOrchestrator {
     // Phase 4: Synthesis
     log.stage("Debate", `Phase 4: Chairman synthesis (${chairmanModel})...`);
     emit({ phase: 4, message: `Chairman (${chairmanModel}) synthesizing...` });
+    emitEvent({ type: "phase_start", phase: "phase4", label: "Chairman Synthesis" });
+    emitEvent({ type: "model_thinking", phase: "phase4", model: chairmanModel });
     const synthesisPrompt = buildDebateSynthesisPrompt(
       topic,
       initialStances,
@@ -143,8 +163,11 @@ export class DebateOrchestrator {
 
     log.stage("Debate", "Complete.");
     emit({ phase: 4, message: "Synthesis complete", detail: synthesis.content });
+    emitEvent({ type: "synthesis", model: synthesis.model, content: synthesis.content, durationMs: synthesis.durationMs });
 
     const totalUsage = sumTokenUsage([phase1TotalUsage, phase2Usage, phase3Usage, phase4Usage]);
+    const totalDurationMs = Date.now() - totalStart;
+    emitEvent({ type: "session_end", totalDurationMs });
 
     return {
       question: topic,
@@ -156,7 +179,7 @@ export class DebateOrchestrator {
         models: participants,
         totalRounds: earlyConsensus ? 0 : rounds,
         earlyConsensus,
-        totalDurationMs: Date.now() - totalStart,
+        totalDurationMs,
         tokenUsage: {
           phase1: phase1TotalUsage,
           phase2: phase2Usage,
@@ -174,6 +197,7 @@ export class DebateOrchestrator {
     participants: string[],
     rounds: number,
     emit: (event: DebateProgressEvent) => void,
+    emitEvent: (event: Parameters<EventLogger["emit"]>[0]) => void,
   ): Promise<DebateDiscussionTurn[]> {
     const allTurns: DebateDiscussionTurn[] = [];
 
@@ -193,6 +217,7 @@ export class DebateOrchestrator {
         ];
 
         const prompt = buildDebateDiscussionPrompt(topic, currentHistory, modelId);
+        emitEvent({ type: "model_thinking", phase: "phase2", model: modelId });
 
         try {
           const result = await this.registry.chat(modelId, [
@@ -206,6 +231,7 @@ export class DebateOrchestrator {
             usage: result.usage,
           });
           emit({ phase: 2, message: `Round ${round}: ${result.model} responded`, detail: result.content });
+          emitEvent({ type: "model_response", phase: "phase2", model: result.model, content: result.content, durationMs: result.durationMs });
         } catch (err) {
           log.error(
             `Debate: ${modelId} failed in round ${round}: ${err instanceof Error ? err.message : err}`,
@@ -215,6 +241,7 @@ export class DebateOrchestrator {
             round,
             response: `[Error: ${err instanceof Error ? err.message : "Unknown error"}]`,
           });
+          emitEvent({ type: "model_error", phase: "phase2", model: modelId, error: err instanceof Error ? err.message : "Unknown error" });
         }
       }
     }

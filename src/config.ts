@@ -5,13 +5,13 @@ import type { CouncilConfig, ProviderType } from "./types.js";
 import { log } from "./logger.js";
 
 const PROVIDER_TYPES: ProviderType[] = [
-  "openai-compatible",
   "anthropic",
   "gemini-api",
   "grok-api",
   "gemini-cli",
   "codex-cli",
   "claude-cli",
+  "chatgpt-web",
 ];
 
 const ProviderConfigSchema = z.object({
@@ -19,6 +19,10 @@ const ProviderConfigSchema = z.object({
   baseUrl: z.string().optional(),
   apiKey: z.string().optional(),
   models: z.array(z.string()),
+  // Playwright provider options
+  service: z.enum(["chatgpt"]).optional(),
+  storageStatePath: z.string().optional(),
+  headless: z.boolean().optional(),
 });
 
 const CouncilConfigSchema = z.object({
