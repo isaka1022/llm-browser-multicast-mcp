@@ -3,3 +3,6 @@ dist/
 logs/
 *.log
 .playwright-auth/
+debug-*.png
+.playwright-mcp/
+.vscode/
