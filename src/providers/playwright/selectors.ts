@@ -6,4 +6,8 @@ export const CHATGPT_SELECTORS = {
   ASSISTANT_MESSAGE: '[data-message-author-role="assistant"]',
   LOGGED_IN_INDICATOR: "#prompt-textarea",
   NEW_CHAT_BUTTON: 'a[data-testid="create-new-chat-button"]',
+
+  // Deep Research
+  DEEP_RESEARCH_URL: "https://chatgpt.com/deep-research",
+  DEEP_RESEARCH_SIDEBAR: 'a[data-testid="deep-research-sidebar-item"]',
 } as const;

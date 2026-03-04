@@ -6,7 +6,8 @@ import { CouncilOrchestrator } from "./orchestrator/council.js";
 import { RoundtableOrchestrator } from "./orchestrator/roundtable.js";
 import { DebateOrchestrator } from "./orchestrator/debate.js";
 import { ProviderRegistry } from "./providers/registry.js";
-import { formatCouncilResult, formatRoundtableResult, formatDebateResult } from "./formatters.js";
+import { formatCouncilResult, formatRoundtableResult, formatDebateResult, formatDeepResearchResult } from "./formatters.js";
+import { PlaywrightProvider } from "./providers/playwright/playwright-provider.js";
 import { log } from "./logger.js";
 import { EventLogger } from "./event-logger.js";
 
@@ -318,6 +319,80 @@ async function main() {
             {
               type: "text" as const,
               text: `Error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // Tool: deep_research
+  server.tool(
+    "deep_research",
+    "Run ChatGPT Deep Research on a query. Performs in-depth web research using ChatGPT's Deep Research mode (5-15 min). Returns comprehensive results with sources. Note: blocks other ChatGPT operations during research.",
+    {
+      query: z.string().describe("The research query or question to investigate"),
+      timeout_minutes: z
+        .number()
+        .int()
+        .min(5)
+        .max(30)
+        .optional()
+        .describe("Maximum time to wait in minutes (5-30). Defaults to 30."),
+    },
+    async ({ query, timeout_minutes }, extra) => {
+      try {
+        const timeoutMs = (timeout_minutes ?? 30) * 60 * 1_000;
+        let step = 0;
+        const progressToken = extra._meta?.progressToken;
+
+        const chatgptConfig = Object.entries(config.providers).find(
+          ([, p]) => p.type === "chatgpt-web",
+        );
+
+        const provider = new PlaywrightProvider({
+          service: chatgptConfig?.[1].service ?? "chatgpt",
+          profileDir: chatgptConfig?.[1].profileDir,
+          headless: chatgptConfig?.[1].headless,
+        });
+
+        try {
+          const result = await provider.deepResearch(
+            query,
+            timeoutMs,
+            (status) => {
+              step++;
+              if (progressToken != null) {
+                extra.sendNotification({
+                  method: "notifications/progress",
+                  params: {
+                    progressToken,
+                    progress: step,
+                    message: `[${status.phase}] ${status.message} (${Math.round(status.elapsedMs / 1000)}s)`,
+                  },
+                });
+              }
+            },
+          );
+
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: formatDeepResearchResult(result),
+              },
+            ],
+          };
+        } finally {
+          await provider.close();
+        }
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Deep Research error: ${err instanceof Error ? err.message : String(err)}`,
             },
           ],
           isError: true,

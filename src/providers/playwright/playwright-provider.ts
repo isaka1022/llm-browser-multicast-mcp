@@ -1,8 +1,16 @@
 import type { ChatMessage, ModelResponse, TokenUsage } from "../../types.js";
 import type { LLMProvider } from "../base.js";
-import type { WebChatAdapter, PlaywrightProviderOptions } from "./types.js";
+import type {
+  WebChatAdapter,
+  PlaywrightProviderOptions,
+  DeepResearchResult,
+  DeepResearchProgressCallback,
+} from "./types.js";
 import { BrowserManager } from "./browser-manager.js";
 import { ChatGPTAdapter } from "./chatgpt-adapter.js";
+import { GeminiAdapter } from "./gemini-adapter.js";
+import { ClaudeAdapter } from "./claude-adapter.js";
+import { GrokAdapter } from "./grok-adapter.js";
 import { log } from "../../logger.js";
 import type { Page } from "playwright";
 
@@ -30,6 +38,18 @@ export class PlaywrightProvider implements LLMProvider {
       case "chatgpt":
         this.adapter = new ChatGPTAdapter();
         this.providerName = "chatgpt";
+        break;
+      case "gemini":
+        this.adapter = new GeminiAdapter();
+        this.providerName = "gemini";
+        break;
+      case "claude":
+        this.adapter = new ClaudeAdapter();
+        this.providerName = "claude-web";
+        break;
+      case "grok":
+        this.adapter = new GrokAdapter();
+        this.providerName = "grok-web";
         break;
       default:
         throw new Error(
@@ -95,6 +115,45 @@ export class PlaywrightProvider implements LLMProvider {
 
   async listModels(): Promise<string[]> {
     return this.adapter.supportedModels;
+  }
+
+  async deepResearch(
+    query: string,
+    timeoutMs: number,
+    onProgress?: DeepResearchProgressCallback,
+  ): Promise<DeepResearchResult> {
+    await this.acquireLock();
+    let page: Page | null = null;
+
+    try {
+      page = await this.browserManager.newPage();
+
+      const chatgptAdapter = this.adapter as ChatGPTAdapter;
+      await chatgptAdapter.navigateToChat(page);
+
+      const loggedIn = await chatgptAdapter.isLoggedIn(page);
+      if (!loggedIn) {
+        throw new Error(
+          "ChatGPT: not logged in. Run with headless: false to log in manually.",
+        );
+      }
+
+      await chatgptAdapter.startNewChat(page);
+      return await chatgptAdapter.deepResearch(
+        page,
+        query,
+        timeoutMs,
+        onProgress,
+      );
+    } catch (error) {
+      log.error(
+        `Deep Research error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    } finally {
+      if (page) await page.close().catch(() => {});
+      this.releaseLock();
+    }
   }
 
   async close(): Promise<void> {

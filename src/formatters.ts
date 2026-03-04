@@ -1,4 +1,5 @@
 import type { CouncilResult, RoundtableResult, DebateResult } from "./types.js";
+import type { DeepResearchResult } from "./providers/playwright/types.js";
 
 export function formatCouncilResult(result: CouncilResult): string {
   const lines: string[] = [];
@@ -121,6 +122,27 @@ export function formatDebateResult(result: DebateResult): string {
   lines.push(`| Phase 3 | ${usage.phase3.inputTokens} | ${usage.phase3.outputTokens} | ${usage.phase3.inputTokens + usage.phase3.outputTokens} |`);
   lines.push(`| Phase 4 | ${usage.phase4.inputTokens} | ${usage.phase4.outputTokens} | ${usage.phase4.inputTokens + usage.phase4.outputTokens} |`);
   lines.push(`| **Total** | **${usage.total.inputTokens}** | **${usage.total.outputTokens}** | **${usage.total.inputTokens + usage.total.outputTokens}** |`);
+
+  return lines.join("\n");
+}
+
+export function formatDeepResearchResult(result: DeepResearchResult): string {
+  const lines: string[] = [];
+
+  lines.push("# Deep Research Result\n");
+  lines.push(result.content);
+  lines.push("");
+
+  if (result.sources.length > 0) {
+    lines.push("## Sources\n");
+    for (const source of result.sources) {
+      lines.push(`- [${source.title || source.url}](${source.url})`);
+    }
+    lines.push("");
+  }
+
+  lines.push("---");
+  lines.push(`*Research time: ${(result.durationMs / 1000).toFixed(1)}s*`);
 
   return lines.join("\n");
 }

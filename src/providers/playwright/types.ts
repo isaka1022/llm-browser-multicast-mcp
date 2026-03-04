@@ -15,8 +15,25 @@ export interface WebChatAdapter {
 }
 
 export interface PlaywrightProviderOptions {
-  service: "chatgpt";
+  service: "chatgpt" | "gemini" | "claude" | "grok";
   profileDir?: string;
   headless?: boolean;
   navigationTimeoutMs?: number;
 }
+
+export interface DeepResearchSource {
+  title: string;
+  url: string;
+}
+
+export interface DeepResearchResult {
+  content: string;
+  sources: DeepResearchSource[];
+  durationMs: number;
+}
+
+export type DeepResearchProgressCallback = (status: {
+  phase: string;
+  message: string;
+  elapsedMs: number;
+}) => void;
