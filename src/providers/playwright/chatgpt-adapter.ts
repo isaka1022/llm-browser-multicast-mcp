@@ -1,38 +1,25 @@
 import type { Page } from "playwright";
 import type {
-  WebChatAdapter,
   DeepResearchResult,
   DeepResearchSource,
   DeepResearchProgressCallback,
 } from "./types.js";
+import { BaseWebChatAdapter, type AdapterSelectors } from "./base-adapter.js";
 import { CHATGPT_SELECTORS as S } from "./selectors.js";
 import { log } from "../../logger.js";
 
 const POLL_INTERVAL_MS = 10_000;
 
-export class ChatGPTAdapter implements WebChatAdapter {
+export class ChatGPTAdapter extends BaseWebChatAdapter {
   readonly serviceName = "chatgpt";
   readonly supportedModels = ["chatgpt/gpt-4o", "chatgpt/gpt-4o-mini"];
 
-  async navigateToChat(page: Page): Promise<void> {
-    const currentUrl = page.url();
-    if (currentUrl.startsWith(S.BASE_URL)) return;
-    await page.goto(S.BASE_URL, { waitUntil: "domcontentloaded" });
-  }
-
-  async isLoggedIn(page: Page): Promise<boolean> {
-    try {
-      await page.waitForSelector(S.LOGGED_IN_INDICATOR, { timeout: 10_000 });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async startNewChat(page: Page): Promise<void> {
-    await page.goto(S.BASE_URL, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector(S.TEXT_INPUT, { timeout: 15_000 });
-  }
+  protected readonly selectors: AdapterSelectors = {
+    BASE_URL: S.BASE_URL,
+    TEXT_INPUT: S.TEXT_INPUT,
+    LOGGED_IN_INDICATOR: S.LOGGED_IN_INDICATOR,
+    RESPONSE_SELECTOR: S.ASSISTANT_MESSAGE,
+  };
 
   async sendAndReceive(
     page: Page,
@@ -47,17 +34,11 @@ export class ChatGPTAdapter implements WebChatAdapter {
     await sendButton.waitFor({ state: "visible", timeout: 5_000 });
     await sendButton.click();
 
-    await this.waitForResponseComplete(page, timeoutMs);
+    await this.waitForStopButtonCycle(page, timeoutMs);
 
     const messages = page.locator(S.ASSISTANT_MESSAGE);
-    const lastMessage = messages.last();
-    const text = await lastMessage.innerText();
-
-    if (!text.trim()) {
-      throw new Error("ChatGPT: empty response received");
-    }
-
-    return text.trim();
+    const text = await messages.last().innerText();
+    return this.validateResponse(text);
   }
 
   async deepResearch(
@@ -74,14 +55,12 @@ export class ChatGPTAdapter implements WebChatAdapter {
     await textArea.click();
     await textArea.fill(query);
 
-    // Deep Research page uses a different send button (text "Deep Research")
     const sendButton = page.locator(S.SEND_BUTTON);
     await sendButton.waitFor({ state: "visible", timeout: 5_000 });
     await sendButton.click();
 
     log.info("ChatGPT Deep Research: query sent, waiting for plan...");
 
-    // Wait for the plan confirmation screen and click "開始する" (Start)
     await this.confirmResearchPlan(page);
 
     log.info("ChatGPT Deep Research: research started");
@@ -91,24 +70,46 @@ export class ChatGPTAdapter implements WebChatAdapter {
     const content = await this.extractDeepResearchResult(page);
     const sources = await this.extractSources(page);
 
-    return {
-      content,
-      sources,
-      durationMs: Date.now() - start,
-    };
+    return { content, sources, durationMs: Date.now() - start };
   }
 
+  // --- ChatGPT-specific: stop button based response wait ---
+
+  private async waitForStopButtonCycle(
+    page: Page,
+    timeoutMs: number,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+
+    try {
+      await page.waitForSelector(S.STOP_BUTTON, {
+        state: "visible",
+        timeout: Math.min(30_000, timeoutMs),
+      });
+    } catch {
+      log.info("ChatGPT: stop button did not appear, checking for response directly");
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("ChatGPT: response timeout");
+
+    await page.waitForSelector(S.STOP_BUTTON, {
+      state: "hidden",
+      timeout: remaining,
+    });
+
+    await page.waitForTimeout(500);
+  }
+
+  // --- Deep Research helpers ---
+
   private async navigateToDeepResearch(page: Page): Promise<void> {
-    // Always navigate fresh to ensure a clean state (no leftover conversations)
     await page.goto(S.DEEP_RESEARCH_URL, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(S.TEXT_INPUT, { timeout: 15_000 });
     log.info("ChatGPT: navigated to Deep Research page");
   }
 
   private async confirmResearchPlan(page: Page): Promise<void> {
-    // After sending a query, Deep Research shows a plan confirmation screen
-    // with "編集する" (Edit), "キャンセル" (Cancel), "開始する" (Start) buttons.
-    // We need to click "開始する" to begin the research.
     const startButton = page.getByRole("button", { name: /開始する|Start/i });
     await startButton.waitFor({ state: "visible", timeout: 30_000 });
     await startButton.click();
@@ -122,9 +123,6 @@ export class ChatGPTAdapter implements WebChatAdapter {
   ): Promise<void> {
     const deadline = startTime + timeoutMs;
 
-    // After clicking "開始する", the research begins.
-    // turn-1 = user query, turn-2 = plan + research progress, turn-3 = final report.
-    // Completion: a new assistant turn appears with substantial content and a copy button.
     const turnCountAtStart = await page
       .locator('[data-testid^="conversation-turn-"]')
       .count();
@@ -139,15 +137,14 @@ export class ChatGPTAdapter implements WebChatAdapter {
         .locator('[data-testid^="conversation-turn-"]')
         .count();
 
-      // A new turn appeared beyond the plan turn — check if it's the final report
       if (currentTurns > turnCountAtStart) {
         const lastTurn = page.locator(
           `[data-testid="conversation-turn-${currentTurns}"]`,
         );
-        const copyBtn = lastTurn.locator(
-          '[data-testid="copy-turn-action-button"]',
-        );
-        const hasCopy = await copyBtn.isVisible().catch(() => false);
+        const hasCopy = await lastTurn
+          .locator('[data-testid="copy-turn-action-button"]')
+          .isVisible()
+          .catch(() => false);
 
         if (hasCopy) {
           await page.waitForTimeout(2_000);
@@ -177,32 +174,22 @@ export class ChatGPTAdapter implements WebChatAdapter {
 
   private async getResearchStatusText(page: Page): Promise<string> {
     try {
-      // Look for progress text in the latest conversation turn
       const lastTurn = page
         .locator('[data-testid^="conversation-turn-"]')
         .last();
       const text = await lastTurn.innerText({ timeout: 2_000 });
-      if (text.trim()) {
-        return text.trim().slice(0, 200);
-      }
+      return text.trim().slice(0, 200);
     } catch {
-      // ignore
+      return "";
     }
-    return "";
   }
 
   private async extractDeepResearchResult(page: Page): Promise<string> {
-    // The final report is in the last conversation turn
     const lastTurn = page
       .locator('[data-testid^="conversation-turn-"]')
       .last();
     const text = await lastTurn.innerText();
-
-    if (!text.trim()) {
-      throw new Error("ChatGPT Deep Research: empty response received");
-    }
-
-    return text.trim();
+    return this.validateResponse(text);
   }
 
   private async extractSources(page: Page): Promise<DeepResearchSource[]> {
@@ -228,36 +215,5 @@ export class ChatGPTAdapter implements WebChatAdapter {
     }
 
     return sources;
-  }
-
-  private async waitForResponseComplete(
-    page: Page,
-    timeoutMs: number,
-  ): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-
-    // Wait for stop button to appear (response started)
-    try {
-      await page.waitForSelector(S.STOP_BUTTON, {
-        state: "visible",
-        timeout: Math.min(30_000, timeoutMs),
-      });
-    } catch {
-      log.info(
-        "ChatGPT: stop button did not appear, checking for response directly",
-      );
-    }
-
-    // Wait for stop button to disappear (response complete)
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error("ChatGPT: response timeout");
-
-    await page.waitForSelector(S.STOP_BUTTON, {
-      state: "hidden",
-      timeout: remaining,
-    });
-
-    // Brief wait for text to stabilize
-    await page.waitForTimeout(500);
   }
 }
