@@ -10,7 +10,7 @@ export class ChatGPTAdapter implements WebChatAdapter {
   async navigateToChat(page: Page): Promise<void> {
     const currentUrl = page.url();
     if (currentUrl.startsWith(S.BASE_URL)) return;
-    await page.goto(S.BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(S.BASE_URL, { waitUntil: "domcontentloaded" });
   }
 
   async isLoggedIn(page: Page): Promise<boolean> {
@@ -23,7 +23,7 @@ export class ChatGPTAdapter implements WebChatAdapter {
   }
 
   async startNewChat(page: Page): Promise<void> {
-    await page.goto(S.BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(S.BASE_URL, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(S.TEXT_INPUT, { timeout: 15_000 });
   }
 

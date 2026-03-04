@@ -16,7 +16,7 @@ export interface WebChatAdapter {
 
 export interface PlaywrightProviderOptions {
   service: "chatgpt";
-  storageStatePath?: string;
+  profileDir?: string;
   headless?: boolean;
   navigationTimeoutMs?: number;
 }

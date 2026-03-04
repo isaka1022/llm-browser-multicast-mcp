@@ -66,7 +66,7 @@ export class ProviderRegistry {
             name,
             new PlaywrightProvider({
               service: providerConfig.service ?? "chatgpt",
-              storageStatePath: providerConfig.storageStatePath,
+              profileDir: providerConfig.profileDir,
               headless: providerConfig.headless,
             }),
           );

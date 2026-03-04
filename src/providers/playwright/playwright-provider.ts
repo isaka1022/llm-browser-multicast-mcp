@@ -21,9 +21,8 @@ export class PlaywrightProvider implements LLMProvider {
 
   constructor(options: PlaywrightProviderOptions) {
     this.browserManager = new BrowserManager({
-      headless: options.headless ?? true,
-      storageStatePath:
-        options.storageStatePath ?? ".playwright-auth/chatgpt-state.json",
+      headless: options.headless ?? false,
+      profileDir: options.profileDir ?? ".playwright-auth/chrome-profile",
       navigationTimeoutMs: options.navigationTimeoutMs ?? 30_000,
     });
 
@@ -68,8 +67,6 @@ export class PlaywrightProvider implements LLMProvider {
         prompt,
         timeoutMs,
       );
-
-      await this.browserManager.saveStorageState();
 
       const usage: TokenUsage = {
         inputTokens: Math.ceil(prompt.length / 4),

@@ -81,7 +81,7 @@ export interface ProviderConfig {
   models: string[];
   // Playwright provider options
   service?: "chatgpt";
-  storageStatePath?: string;
+  profileDir?: string;
   headless?: boolean;
 }
 
