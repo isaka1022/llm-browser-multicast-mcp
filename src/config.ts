@@ -12,6 +12,9 @@ const PROVIDER_TYPES: ProviderType[] = [
   "codex-cli",
   "claude-cli",
   "chatgpt-web",
+  "gemini-web",
+  "claude-web",
+  "grok-web",
 ];
 
 const ProviderConfigSchema = z.object({
@@ -20,7 +23,7 @@ const ProviderConfigSchema = z.object({
   apiKey: z.string().optional(),
   models: z.array(z.string()),
   // Playwright provider options
-  service: z.enum(["chatgpt"]).optional(),
+  service: z.enum(["chatgpt", "gemini", "claude", "grok"]).optional(),
   storageStatePath: z.string().optional(),
   headless: z.boolean().optional(),
 });

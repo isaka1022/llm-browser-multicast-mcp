@@ -71,6 +71,36 @@ export class ProviderRegistry {
             }),
           );
           break;
+        case "gemini-web":
+          this.providers.set(
+            name,
+            new PlaywrightProvider({
+              service: providerConfig.service ?? "gemini",
+              profileDir: providerConfig.profileDir,
+              headless: providerConfig.headless,
+            }),
+          );
+          break;
+        case "claude-web":
+          this.providers.set(
+            name,
+            new PlaywrightProvider({
+              service: providerConfig.service ?? "claude",
+              profileDir: providerConfig.profileDir,
+              headless: providerConfig.headless,
+            }),
+          );
+          break;
+        case "grok-web":
+          this.providers.set(
+            name,
+            new PlaywrightProvider({
+              service: providerConfig.service ?? "grok",
+              profileDir: providerConfig.profileDir,
+              headless: providerConfig.headless,
+            }),
+          );
+          break;
       }
     }
   }

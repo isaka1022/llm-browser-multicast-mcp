@@ -72,7 +72,10 @@ export type ProviderType =
   | "gemini-cli"
   | "codex-cli"
   | "claude-cli"
-  | "chatgpt-web";
+  | "chatgpt-web"
+  | "gemini-web"
+  | "claude-web"
+  | "grok-web";
 
 export interface ProviderConfig {
   type: ProviderType;
@@ -80,7 +83,7 @@ export interface ProviderConfig {
   apiKey?: string;
   models: string[];
   // Playwright provider options
-  service?: "chatgpt";
+  service?: "chatgpt" | "gemini" | "claude" | "grok";
   profileDir?: string;
   headless?: boolean;
 }
