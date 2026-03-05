@@ -1,10 +1,11 @@
 import type { Page } from "playwright";
 import { BaseWebChatAdapter, type AdapterSelectors } from "./base-adapter.js";
 import { GROK_SELECTORS as S } from "./grok-selectors.js";
+import { log } from "../../logger.js";
 
 export class GrokAdapter extends BaseWebChatAdapter {
   readonly serviceName = "grok";
-  readonly supportedModels = ["grok-web/grok"];
+  readonly supportedModels = ["grok-web/expert"];
 
   protected readonly selectors: AdapterSelectors = {
     BASE_URL: S.BASE_URL,
@@ -42,5 +43,50 @@ export class GrokAdapter extends BaseWebChatAdapter {
       countBefore,
     );
     return this.validateResponse(text);
+  }
+
+  async selectModel(page: Page, model: string): Promise<void> {
+    const modelButton = page.locator(S.MODEL_SELECTOR_BUTTON);
+    const isVisible = await modelButton.isVisible().catch(() => false);
+    if (!isVisible) {
+      log.info(`Grok: model selector not visible, skip selecting "${model}"`);
+      return;
+    }
+
+    // Map model names to menu text patterns
+    const modelPatterns: Record<string, RegExp> = {
+      expert: /^expert/i,
+      "grok-4.20": /grok\s*4\.?20/i,
+      heavy: /^heavy/i,
+    };
+    const pattern = modelPatterns[model] ?? modelPatterns["expert"];
+
+    await modelButton.click();
+    await page.waitForTimeout(500);
+
+    const option = page
+      .locator(S.MODEL_OPTION)
+      .filter({ hasText: pattern })
+      .first();
+    const optionVisible = await option.isVisible().catch(() => false);
+    if (!optionVisible) {
+      await page.keyboard.press("Escape").catch(() => {});
+      log.info(`Grok: model option not found for "${model}"`);
+      return;
+    }
+
+    // Check if the option is disabled or requires upgrade
+    const isDisabled = await option.evaluate(
+      (el) => el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true",
+    ).catch(() => false);
+    if (isDisabled) {
+      await page.keyboard.press("Escape").catch(() => {});
+      log.info(`Grok: "${model}" is disabled (plan limitation), using default mode`);
+      return;
+    }
+
+    await option.click();
+    await page.waitForTimeout(500);
+    log.info(`Grok: selected model "${model}"`);
   }
 }

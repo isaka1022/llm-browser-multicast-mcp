@@ -46,6 +46,11 @@ export abstract class BaseWebChatAdapter implements WebChatAdapter {
     timeoutMs: number,
   ): Promise<string>;
 
+  /** Select a model in the UI. Default is no-op; adapters override as needed. */
+  async selectModel(_page: Page, _model: string): Promise<void> {
+    // no-op by default
+  }
+
   /**
    * Paste text into the focused element via clipboard.
    * Unlike keyboard.type, this handles multi-line text without triggering Enter/submit.

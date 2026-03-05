@@ -25,29 +25,29 @@
     "chatgpt": {
       "type": "chatgpt-web",
       "headless": false,
-      "models": ["gpt-4o", "gpt-4o-mini"]
+      "models": ["gpt-5.3"]
     },
     "gemini-web": {
       "type": "gemini-web",
       "headless": false,
-      "models": ["gemini-pro"]
+      "models": ["pro"]
     },
     "claude-web": {
       "type": "claude-web",
       "headless": false,
-      "models": ["sonnet"]
+      "models": ["opus"]
     },
     "grok-web": {
       "type": "grok-web",
       "headless": false,
-      "models": ["grok"]
+      "models": ["expert"]
     }
   },
   "defaultModels": [
-    "chatgpt/gpt-4o",
-    "gemini-web/gemini-pro",
-    "claude-web/sonnet",
-    "grok-web/grok"
+    "chatgpt/gpt-5.3",
+    "gemini-web/pro",
+    "claude-web/opus",
+    "grok-web/expert"
   ],
   "chairman": "claude-cli/default",
   "timeoutMs": 300000

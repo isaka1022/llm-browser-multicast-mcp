@@ -12,7 +12,7 @@ const POLL_INTERVAL_MS = 10_000;
 
 export class ChatGPTAdapter extends BaseWebChatAdapter {
   readonly serviceName = "chatgpt";
-  readonly supportedModels = ["chatgpt/gpt-4o", "chatgpt/gpt-4o-mini"];
+  readonly supportedModels = ["chatgpt/gpt-5.3"];
 
   protected readonly selectors: AdapterSelectors = {
     BASE_URL: S.BASE_URL,
@@ -57,6 +57,34 @@ export class ChatGPTAdapter extends BaseWebChatAdapter {
       timeoutMs,
     );
     return this.validateResponse(text);
+  }
+
+  async selectModel(page: Page, model: string): Promise<void> {
+    const modelButton = page.locator(S.MODEL_SELECTOR_BUTTON);
+    const isVisible = await modelButton.isVisible().catch(() => false);
+    if (!isVisible) {
+      log.info(`ChatGPT: model selector not visible, skip selecting "${model}"`);
+      return;
+    }
+
+    await modelButton.click();
+    await page.waitForTimeout(500);
+
+    const labelPattern = /gpt\s*[- ]?5\.?3/i;
+    const option = page
+      .locator(S.MODEL_OPTION)
+      .filter({ hasText: labelPattern })
+      .first();
+    const optionVisible = await option.isVisible().catch(() => false);
+    if (!optionVisible) {
+      await page.keyboard.press("Escape").catch(() => {});
+      log.info(`ChatGPT: model option not found for "${model}"`);
+      return;
+    }
+
+    await option.click();
+    await page.waitForTimeout(500);
+    log.info(`ChatGPT: selected model "${model}"`);
   }
 
   private async waitForThinkingComplete(

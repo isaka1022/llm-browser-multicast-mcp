@@ -89,6 +89,7 @@ export class PlaywrightProvider implements LLMProvider {
         }
 
         await this.adapter.startNewChat(page);
+        await this.adapter.selectModel(page, model);
         this.persistentPage = page;
       }
 

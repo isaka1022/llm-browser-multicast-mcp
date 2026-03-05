@@ -12,6 +12,9 @@ export interface WebChatAdapter {
     prompt: string,
     timeoutMs: number,
   ): Promise<string>;
+
+  /** Select a specific model in the UI (no-op if not supported). */
+  selectModel(page: Page, model: string): Promise<void>;
 }
 
 export interface PlaywrightProviderOptions {

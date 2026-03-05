@@ -1,10 +1,11 @@
 import type { Page } from "playwright";
 import { BaseWebChatAdapter, type AdapterSelectors } from "./base-adapter.js";
 import { CLAUDE_SELECTORS as S } from "./claude-selectors.js";
+import { log } from "../../logger.js";
 
 export class ClaudeAdapter extends BaseWebChatAdapter {
   readonly serviceName = "claude";
-  readonly supportedModels = ["claude-web/sonnet"];
+  readonly supportedModels = ["claude-web/opus"];
 
   protected readonly selectors: AdapterSelectors = {
     BASE_URL: "https://claude.ai",
@@ -28,29 +29,47 @@ export class ClaudeAdapter extends BaseWebChatAdapter {
     await this.pasteText(page, prompt);
     await page.keyboard.press("Enter");
 
-    await this.pollForStableText(
+    // Wait for the response container to appear
+    await this.waitForNewResponse(
       page,
       S.ASSISTANT_MESSAGE,
-      timeoutMs,
       countBefore,
+      timeoutMs,
     );
 
-    // Use .standard-markdown to avoid capturing extended thinking text
-    const text = await this.extractLastResponse(page);
+    // Poll on .standard-markdown to skip thinking/loading text
+    const text = await this.pollForStableText(
+      page,
+      S.STANDARD_MARKDOWN,
+      timeoutMs,
+    );
     return this.validateResponse(text);
   }
 
-  private async extractLastResponse(page: Page): Promise<string> {
-    const markdownBlocks = page.locator(S.STANDARD_MARKDOWN);
-    const count = await markdownBlocks.count();
-    if (count > 0) {
-      return await markdownBlocks.last().innerText();
+  async selectModel(page: Page, model: string): Promise<void> {
+    const modelButton = page.locator(S.MODEL_SELECTOR_BUTTON);
+    const isVisible = await modelButton.isVisible().catch(() => false);
+    if (!isVisible) {
+      log.info(`Claude: model selector not visible, skip selecting "${model}"`);
+      return;
     }
-    const responses = page.locator(S.ASSISTANT_MESSAGE);
-    const responseCount = await responses.count();
-    if (responseCount === 0) {
-      throw new Error("Claude: no response found");
+
+    await modelButton.click();
+    await page.waitForTimeout(500);
+
+    const option = page
+      .locator(S.MODEL_OPTION)
+      .filter({ hasText: /opus/i })
+      .first();
+    const optionVisible = await option.isVisible().catch(() => false);
+    if (!optionVisible) {
+      await page.keyboard.press("Escape").catch(() => {});
+      log.info(`Claude: model option not found for "${model}"`);
+      return;
     }
-    return await responses.last().innerText();
+
+    await option.click();
+    await page.waitForTimeout(500);
+    log.info(`Claude: selected model "${model}"`);
   }
 }
