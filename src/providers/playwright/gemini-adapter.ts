@@ -18,6 +18,11 @@ export class GeminiAdapter extends BaseWebChatAdapter {
     prompt: string,
     timeoutMs: number,
   ): Promise<string> {
+    const countBefore = await this.countResponseElements(
+      page,
+      S.ASSISTANT_MESSAGE,
+    );
+
     const textArea = page.locator(S.TEXT_INPUT);
     await textArea.click();
     await page.keyboard.type(prompt, { delay: 10 });
@@ -28,6 +33,7 @@ export class GeminiAdapter extends BaseWebChatAdapter {
       page,
       S.ASSISTANT_MESSAGE,
       timeoutMs,
+      countBefore,
     );
     return this.validateResponse(text);
   }

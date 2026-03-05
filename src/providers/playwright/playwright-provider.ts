@@ -27,10 +27,14 @@ export class PlaywrightProvider implements LLMProvider {
   private readonly maxConcurrency = 1;
   private waitQueue: Array<() => void> = [];
 
+  private readonly profileDir: string;
+  private persistentPage: Page | null = null;
+
   constructor(options: PlaywrightProviderOptions) {
-    this.browserManager = new BrowserManager({
+    this.profileDir = options.profileDir ?? ".playwright-auth/chrome-profile";
+    this.browserManager = BrowserManager.getShared({
       headless: options.headless ?? false,
-      profileDir: options.profileDir ?? ".playwright-auth/chrome-profile",
+      profileDir: this.profileDir,
       navigationTimeoutMs: options.navigationTimeoutMs ?? 30_000,
     });
 
@@ -64,29 +68,55 @@ export class PlaywrightProvider implements LLMProvider {
     timeoutMs: number,
   ): Promise<ModelResponse> {
     await this.acquireLock();
-    let page: Page | null = null;
 
     try {
       const start = Date.now();
       const prompt = messagesToPrompt(messages);
 
-      page = await this.browserManager.newPage();
-      await this.adapter.navigateToChat(page);
+      // First call: open page and start new chat
+      // Subsequent calls: reuse existing page (same tab / conversation)
+      if (!this.persistentPage || this.persistentPage.isClosed()) {
+        const page = await this.browserManager.newPage();
+        await this.adapter.navigateToChat(page);
 
-      const loggedIn = await this.adapter.isLoggedIn(page);
-      if (!loggedIn) {
-        throw new Error(
-          `${this.providerName}: not logged in. ` +
-            `Run with headless: false to log in manually, then restart.`,
-        );
+        const loggedIn = await this.adapter.isLoggedIn(page);
+        if (!loggedIn) {
+          await page.close().catch(() => {});
+          throw new Error(
+            `${this.providerName}: not logged in. ` +
+              `Run with headless: false to log in manually, then restart.`,
+          );
+        }
+
+        await this.adapter.startNewChat(page);
+        this.persistentPage = page;
       }
 
-      await this.adapter.startNewChat(page);
-      const content = await this.adapter.sendAndReceive(
-        page,
-        prompt,
-        timeoutMs,
-      );
+      let content: string;
+      try {
+        content = await this.adapter.sendAndReceive(
+          this.persistentPage,
+          prompt,
+          timeoutMs,
+        );
+      } catch (err) {
+        // On timeout, reload the page (preserving chat URL) and retry once
+        const isTimeout =
+          err instanceof Error &&
+          (err.message.includes("timeout") || err.message.includes("Timeout"));
+        if (!isTimeout || !this.persistentPage) throw err;
+
+        log.info(
+          `${this.providerName}: timed out, reloading page and retrying...`,
+        );
+        await this.persistentPage.reload({ waitUntil: "domcontentloaded" });
+        await this.persistentPage.waitForTimeout(3_000);
+        content = await this.adapter.sendAndReceive(
+          this.persistentPage,
+          prompt,
+          timeoutMs,
+        );
+      }
 
       const usage: TokenUsage = {
         inputTokens: Math.ceil(prompt.length / 4),
@@ -106,9 +136,6 @@ export class PlaywrightProvider implements LLMProvider {
       );
       throw error;
     } finally {
-      if (page) {
-        await page.close().catch(() => {});
-      }
       this.releaseLock();
     }
   }
@@ -157,7 +184,11 @@ export class PlaywrightProvider implements LLMProvider {
   }
 
   async close(): Promise<void> {
-    await this.browserManager.close();
+    if (this.persistentPage && !this.persistentPage.isClosed()) {
+      await this.persistentPage.close().catch(() => {});
+      this.persistentPage = null;
+    }
+    await BrowserManager.releaseShared({ profileDir: this.profileDir });
   }
 
   private async acquireLock(): Promise<void> {

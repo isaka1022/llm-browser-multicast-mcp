@@ -46,21 +46,45 @@ export abstract class BaseWebChatAdapter implements WebChatAdapter {
     timeoutMs: number,
   ): Promise<string>;
 
+  /**
+   * Count the current number of response elements on the page.
+   * Call this before sending a message to track when a new response appears.
+   */
+  protected async countResponseElements(
+    page: Page,
+    selector: string,
+  ): Promise<number> {
+    return page.locator(selector).count();
+  }
+
   protected async pollForStableText(
     page: Page,
     selector: string,
     timeoutMs: number,
+    initialCount?: number,
   ): Promise<string> {
     const deadline = Date.now() + timeoutMs;
 
-    // Wait for at least one response element
-    try {
-      await page.waitForSelector(selector, {
-        state: "visible",
-        timeout: Math.min(30_000, timeoutMs),
-      });
-    } catch {
-      log.info(`${this.serviceName}: response element did not appear`);
+    // If initialCount is given, wait for a NEW element to appear beyond that count
+    if (initialCount !== undefined) {
+      while (Date.now() < deadline) {
+        const count = await page.locator(selector).count();
+        if (count > initialCount) break;
+        await page.waitForTimeout(500);
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(`${this.serviceName}: new response did not appear`);
+      }
+    } else {
+      // Wait for at least one response element
+      try {
+        await page.waitForSelector(selector, {
+          state: "visible",
+          timeout: Math.min(30_000, timeoutMs),
+        });
+      } catch {
+        log.info(`${this.serviceName}: response element did not appear`);
+      }
     }
 
     let previousText = "";
@@ -85,6 +109,24 @@ export abstract class BaseWebChatAdapter implements WebChatAdapter {
     }
 
     throw new Error(`${this.serviceName}: response timeout`);
+  }
+
+  /**
+   * Wait until a new response element appears beyond the initial count.
+   */
+  protected async waitForNewResponse(
+    page: Page,
+    selector: string,
+    initialCount: number,
+    timeoutMs: number,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const count = await page.locator(selector).count();
+      if (count > initialCount) return;
+      await page.waitForTimeout(500);
+    }
+    throw new Error(`${this.serviceName}: new response did not appear`);
   }
 
   protected validateResponse(text: string): string {

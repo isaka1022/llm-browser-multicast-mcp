@@ -18,13 +18,23 @@ export class ClaudeAdapter extends BaseWebChatAdapter {
     prompt: string,
     timeoutMs: number,
   ): Promise<string> {
+    const countBefore = await this.countResponseElements(
+      page,
+      S.ASSISTANT_MESSAGE,
+    );
+
     const editor = page.locator(S.TEXT_INPUT);
     await editor.click();
     await page.keyboard.type(prompt, { delay: 10 });
     await page.waitForTimeout(300);
     await page.keyboard.press("Enter");
 
-    await this.pollForStableText(page, S.ASSISTANT_MESSAGE, timeoutMs);
+    await this.pollForStableText(
+      page,
+      S.ASSISTANT_MESSAGE,
+      timeoutMs,
+      countBefore,
+    );
 
     // Use .standard-markdown to avoid capturing extended thinking text
     const text = await this.extractLastResponse(page);

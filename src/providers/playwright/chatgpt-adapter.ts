@@ -26,6 +26,11 @@ export class ChatGPTAdapter extends BaseWebChatAdapter {
     prompt: string,
     timeoutMs: number,
   ): Promise<string> {
+    const countBefore = await this.countResponseElements(
+      page,
+      S.ASSISTANT_MESSAGE,
+    );
+
     const textArea = page.locator(S.TEXT_INPUT);
     await textArea.click();
     await textArea.fill(prompt);
@@ -34,11 +39,40 @@ export class ChatGPTAdapter extends BaseWebChatAdapter {
     await sendButton.waitFor({ state: "visible", timeout: 5_000 });
     await sendButton.click();
 
-    await this.waitForStopButtonCycle(page, timeoutMs);
+    // Wait for a new assistant message element to appear
+    await this.waitForNewResponse(
+      page,
+      S.ASSISTANT_MESSAGE,
+      countBefore,
+      timeoutMs,
+    );
 
-    const messages = page.locator(S.ASSISTANT_MESSAGE);
-    const text = await messages.last().innerText();
+    // ChatGPT reasoning models use .result-thinking while thinking (innerText is empty).
+    // Wait for thinking to finish before polling for stable text.
+    await this.waitForThinkingComplete(page, timeoutMs);
+
+    const text = await this.pollForStableText(
+      page,
+      S.ASSISTANT_MESSAGE,
+      timeoutMs,
+    );
     return this.validateResponse(text);
+  }
+
+  private async waitForThinkingComplete(
+    page: Page,
+    timeoutMs: number,
+  ): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    const thinkingSelector = `${S.ASSISTANT_MESSAGE} .result-thinking`;
+
+    while (Date.now() < deadline) {
+      const count = await page.locator(thinkingSelector).count();
+      if (count === 0) return;
+      await page.waitForTimeout(1_000);
+    }
+
+    throw new Error("ChatGPT: thinking did not complete in time");
   }
 
   async deepResearch(
@@ -71,34 +105,6 @@ export class ChatGPTAdapter extends BaseWebChatAdapter {
     const sources = await this.extractSources(page);
 
     return { content, sources, durationMs: Date.now() - start };
-  }
-
-  // --- ChatGPT-specific: stop button based response wait ---
-
-  private async waitForStopButtonCycle(
-    page: Page,
-    timeoutMs: number,
-  ): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
-
-    try {
-      await page.waitForSelector(S.STOP_BUTTON, {
-        state: "visible",
-        timeout: Math.min(30_000, timeoutMs),
-      });
-    } catch {
-      log.info("ChatGPT: stop button did not appear, checking for response directly");
-    }
-
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) throw new Error("ChatGPT: response timeout");
-
-    await page.waitForSelector(S.STOP_BUTTON, {
-      state: "hidden",
-      timeout: remaining,
-    });
-
-    await page.waitForTimeout(500);
   }
 
   // --- Deep Research helpers ---

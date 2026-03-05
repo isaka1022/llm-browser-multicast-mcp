@@ -18,6 +18,11 @@ export class GrokAdapter extends BaseWebChatAdapter {
     prompt: string,
     timeoutMs: number,
   ): Promise<string> {
+    const countBefore = await this.countResponseElements(
+      page,
+      S.RESPONSE_MARKDOWN,
+    );
+
     const editor = page.locator(S.TEXT_INPUT).first();
     await editor.click();
     await page.keyboard.type(prompt, { delay: 10 });
@@ -31,12 +36,11 @@ export class GrokAdapter extends BaseWebChatAdapter {
       await page.keyboard.press("Enter");
     }
 
-    // Grok has both user and assistant messages with .response-content-markdown
-    // Wait for count >= 2 (user + assistant), then stabilize on last
     const text = await this.pollForStableText(
       page,
       S.RESPONSE_MARKDOWN,
       timeoutMs,
+      countBefore,
     );
     return this.validateResponse(text);
   }
