@@ -10,10 +10,53 @@ interface BrowserManagerOptions {
   navigationTimeoutMs: number;
 }
 
+interface PoolEntry {
+  manager: BrowserManager;
+  refCount: number;
+}
+
 export class BrowserManager {
+  private static pool = new Map<string, PoolEntry>();
+
   private context: BrowserContext | null = null;
   private initPromise: Promise<void> | null = null;
   private readonly options: BrowserManagerOptions;
+
+  /**
+   * Get a shared BrowserManager for the given profile directory.
+   * Multiple callers with the same profileDir share one browser instance.
+   */
+  static getShared(options?: Partial<BrowserManagerOptions>): BrowserManager {
+    const profileDir = options?.profileDir ?? DEFAULT_PROFILE_DIR;
+    const entry = BrowserManager.pool.get(profileDir);
+
+    if (entry) {
+      entry.refCount++;
+      return entry.manager;
+    }
+
+    const manager = new BrowserManager(options);
+    BrowserManager.pool.set(profileDir, { manager, refCount: 1 });
+    return manager;
+  }
+
+  /**
+   * Release a shared BrowserManager. Closes the browser when the last
+   * consumer releases it.
+   */
+  static async releaseShared(
+    options?: Partial<BrowserManagerOptions>,
+  ): Promise<void> {
+    const profileDir = options?.profileDir ?? DEFAULT_PROFILE_DIR;
+    const entry = BrowserManager.pool.get(profileDir);
+    if (!entry) return;
+
+    entry.refCount--;
+    if (entry.refCount <= 0) {
+      BrowserManager.pool.delete(profileDir);
+      await entry.manager.close();
+    }
+  }
 
   constructor(options?: Partial<BrowserManagerOptions>) {
     this.options = {
@@ -22,13 +65,6 @@ export class BrowserManager {
       navigationTimeoutMs:
         options?.navigationTimeoutMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
     };
-
-    const cleanup = () => {
-      this.close().catch(() => {});
-    };
-    process.on("beforeExit", cleanup);
-    process.on("SIGINT", cleanup);
-    process.on("SIGTERM", cleanup);
   }
 
   async ensureInitialized(): Promise<void> {
