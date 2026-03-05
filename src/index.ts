@@ -13,6 +13,7 @@ import { EventLogger } from "./event-logger.js";
 
 async function main() {
   const config = await loadConfig();
+  const registry = new ProviderRegistry(config);
 
   const server = new McpServer({
     name: "llm-council",
@@ -39,7 +40,7 @@ async function main() {
     async ({ question, models, chairman }) => {
       try {
         const eventLogger = new EventLogger();
-        const orchestrator = new CouncilOrchestrator(config);
+        const orchestrator = new CouncilOrchestrator(config, registry);
         const result = await orchestrator.discuss(question, models, chairman, eventLogger);
         return {
           content: [{ type: "text" as const, text: formatCouncilResult(result) }],
@@ -81,7 +82,7 @@ async function main() {
     async ({ question, models, rounds }) => {
       try {
         const eventLogger = new EventLogger();
-        const orchestrator = new RoundtableOrchestrator(config);
+        const orchestrator = new RoundtableOrchestrator(config, registry);
         const result = await orchestrator.discuss(
           question,
           models,
@@ -132,7 +133,7 @@ async function main() {
         let step = 0;
         const progressToken = extra._meta?.progressToken;
         const eventLogger = new EventLogger();
-        const orchestrator = new DebateOrchestrator(config);
+        const orchestrator = new DebateOrchestrator(config, registry);
         const result = await orchestrator.discuss(
           question,
           models,
@@ -178,7 +179,6 @@ async function main() {
     {},
     async () => {
       try {
-        const registry = new ProviderRegistry(config);
         const models = await registry.listAllModels();
         const defaultModels = config.defaultModels;
         const chairman = config.chairman;
@@ -230,7 +230,6 @@ async function main() {
     },
     async ({ model, prompt, context }) => {
       try {
-        const registry = new ProviderRegistry(config);
         const messages = [];
         if (context) {
           messages.push({
@@ -282,7 +281,6 @@ async function main() {
     },
     async ({ models, prompt, context }) => {
       try {
-        const registry = new ProviderRegistry(config);
         const modelIds =
           models.length > 0 ? models : config.defaultModels;
         const messages = [];
@@ -400,6 +398,15 @@ async function main() {
       }
     },
   );
+
+  // Graceful shutdown: close all providers (browser pages, etc.)
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, async () => {
+      log.info(`Received ${signal}, closing providers...`);
+      await registry.closeAll();
+      process.exit(0);
+    });
+  }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

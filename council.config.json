@@ -26,13 +26,29 @@
       "type": "chatgpt-web",
       "headless": false,
       "models": ["gpt-4o", "gpt-4o-mini"]
+    },
+    "gemini-web": {
+      "type": "gemini-web",
+      "headless": false,
+      "models": ["gemini-pro"]
+    },
+    "claude-web": {
+      "type": "claude-web",
+      "headless": false,
+      "models": ["sonnet"]
+    },
+    "grok-web": {
+      "type": "grok-web",
+      "headless": false,
+      "models": ["grok"]
     }
   },
   "defaultModels": [
-    "gemini-cli/default",
-    "claude-cli/default",
-    "codex-cli/default"
+    "chatgpt/gpt-4o",
+    "gemini-web/gemini-pro",
+    "claude-web/sonnet",
+    "grok-web/grok"
   ],
-  "chairman": "gemini-cli/default",
+  "chairman": "claude-cli/default",
   "timeoutMs": 300000
 }

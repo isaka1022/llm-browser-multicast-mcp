@@ -4,7 +4,7 @@ import { GEMINI_SELECTORS as S } from "./gemini-selectors.js";
 
 export class GeminiAdapter extends BaseWebChatAdapter {
   readonly serviceName = "gemini";
-  readonly supportedModels = ["gemini/gemini-pro"];
+  readonly supportedModels = ["gemini-web/gemini-pro"];
 
   protected readonly selectors: AdapterSelectors = {
     BASE_URL: S.BASE_URL,

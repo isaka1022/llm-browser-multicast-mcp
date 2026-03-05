@@ -156,6 +156,14 @@ export class ProviderRegistry {
     });
   }
 
+  async closeAll(): Promise<void> {
+    const closeable = [...this.providers.values()].filter(
+      (p): p is LLMProvider & { close(): Promise<void> } =>
+        "close" in p && typeof (p as Record<string, unknown>).close === "function",
+    );
+    await Promise.all(closeable.map((p) => p.close()));
+  }
+
   async listAllModels(): Promise<string[]> {
     const allModels: string[] = [];
     for (const [name, provider] of this.providers.entries()) {

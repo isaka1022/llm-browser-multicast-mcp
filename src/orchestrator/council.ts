@@ -18,8 +18,11 @@ import {
 export class CouncilOrchestrator {
   private registry: ProviderRegistry;
 
-  constructor(private readonly config: CouncilConfig) {
-    this.registry = new ProviderRegistry(config);
+  constructor(
+    private readonly config: CouncilConfig,
+    registry?: ProviderRegistry,
+  ) {
+    this.registry = registry ?? new ProviderRegistry(config);
   }
 
   async discuss(
