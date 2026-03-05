@@ -47,6 +47,17 @@ export abstract class BaseWebChatAdapter implements WebChatAdapter {
   ): Promise<string>;
 
   /**
+   * Paste text into the focused element via clipboard.
+   * Unlike keyboard.type, this handles multi-line text without triggering Enter/submit.
+   */
+  protected async pasteText(page: Page, text: string): Promise<void> {
+    await page.evaluate((t) => navigator.clipboard.writeText(t), text);
+    const modifier = process.platform === "darwin" ? "Meta" : "Control";
+    await page.keyboard.press(`${modifier}+v`);
+    await page.waitForTimeout(200);
+  }
+
+  /**
    * Count the current number of response elements on the page.
    * Call this before sending a message to track when a new response appears.
    */

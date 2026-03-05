@@ -17,10 +17,35 @@ interface PoolEntry {
 
 export class BrowserManager {
   private static pool = new Map<string, PoolEntry>();
+  private static shutdownRegistered = false;
 
   private context: BrowserContext | null = null;
   private initPromise: Promise<void> | null = null;
   private readonly options: BrowserManagerOptions;
+
+  /**
+   * Close all browser instances in the pool.
+   * Called automatically on process exit signals.
+   */
+  static async closeAll(): Promise<void> {
+    const entries = [...BrowserManager.pool.values()];
+    BrowserManager.pool.clear();
+    await Promise.all(entries.map((e) => e.manager.close()));
+  }
+
+  private static registerShutdownHook(): void {
+    if (BrowserManager.shutdownRegistered) return;
+    BrowserManager.shutdownRegistered = true;
+
+    const cleanup = async () => {
+      await BrowserManager.closeAll();
+      process.exit(0);
+    };
+
+    process.on("SIGINT", cleanup);
+    process.on("SIGTERM", cleanup);
+    process.on("beforeExit", () => BrowserManager.closeAll());
+  }
 
   /**
    * Get a shared BrowserManager for the given profile directory.
@@ -37,6 +62,7 @@ export class BrowserManager {
 
     const manager = new BrowserManager(options);
     BrowserManager.pool.set(profileDir, { manager, refCount: 1 });
+    BrowserManager.registerShutdownHook();
     return manager;
   }
 

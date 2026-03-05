@@ -25,8 +25,7 @@ export class GeminiAdapter extends BaseWebChatAdapter {
 
     const textArea = page.locator(S.TEXT_INPUT);
     await textArea.click();
-    await page.keyboard.type(prompt, { delay: 10 });
-    await page.waitForTimeout(300);
+    await this.pasteText(page, prompt);
     await page.keyboard.press("Enter");
 
     const text = await this.pollForStableText(

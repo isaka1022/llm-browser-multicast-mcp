@@ -25,8 +25,7 @@ export class GrokAdapter extends BaseWebChatAdapter {
 
     const editor = page.locator(S.TEXT_INPUT).first();
     await editor.click();
-    await page.keyboard.type(prompt, { delay: 10 });
-    await page.waitForTimeout(300);
+    await this.pasteText(page, prompt);
 
     const sendBtn = page.locator(S.SEND_BUTTON).first();
     const sendVisible = await sendBtn.isVisible().catch(() => false);
