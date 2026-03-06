@@ -6,3 +6,4 @@ logs/
 debug-*.png
 .playwright-mcp/
 .vscode/
+Flow/

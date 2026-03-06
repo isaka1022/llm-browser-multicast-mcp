@@ -25,7 +25,7 @@
     "chatgpt": {
       "type": "chatgpt-web",
       "headless": false,
-      "models": ["gpt-5.3"]
+      "models": ["thinking", "auto"]
     },
     "gemini-web": {
       "type": "gemini-web",
@@ -35,18 +35,18 @@
     "claude-web": {
       "type": "claude-web",
       "headless": false,
-      "models": ["opus"]
+      "models": ["sonnet"]
     },
     "grok-web": {
       "type": "grok-web",
       "headless": false,
-      "models": ["expert"]
+      "models": ["expert", "grok-4.20"]
     }
   },
   "defaultModels": [
-    "chatgpt/gpt-5.3",
+    "chatgpt/thinking",
     "gemini-web/pro",
-    "claude-web/opus",
+    "claude-web/sonnet",
     "grok-web/expert"
   ],
   "chairman": "claude-cli/default",

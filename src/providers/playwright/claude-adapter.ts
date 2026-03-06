@@ -5,7 +5,7 @@ import { log } from "../../logger.js";
 
 export class ClaudeAdapter extends BaseWebChatAdapter {
   readonly serviceName = "claude";
-  readonly supportedModels = ["claude-web/opus"];
+  readonly supportedModels = ["claude-web/sonnet"];
 
   protected readonly selectors: AdapterSelectors = {
     BASE_URL: "https://claude.ai",
@@ -59,7 +59,7 @@ export class ClaudeAdapter extends BaseWebChatAdapter {
 
     const option = page
       .locator(S.MODEL_OPTION)
-      .filter({ hasText: /opus/i })
+      .filter({ hasText: /sonnet/i })
       .first();
     const optionVisible = await option.isVisible().catch(() => false);
     if (!optionVisible) {

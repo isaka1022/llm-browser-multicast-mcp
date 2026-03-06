@@ -12,7 +12,7 @@ const POLL_INTERVAL_MS = 10_000;
 
 export class ChatGPTAdapter extends BaseWebChatAdapter {
   readonly serviceName = "chatgpt";
-  readonly supportedModels = ["chatgpt/gpt-5.3"];
+  readonly supportedModels = ["chatgpt/thinking", "chatgpt/auto"];
 
   protected readonly selectors: AdapterSelectors = {
     BASE_URL: S.BASE_URL,
@@ -70,15 +70,19 @@ export class ChatGPTAdapter extends BaseWebChatAdapter {
     await modelButton.click();
     await page.waitForTimeout(500);
 
-    const labelPattern = /gpt\s*[- ]?5\.?3/i;
-    const option = page
-      .locator(S.MODEL_OPTION)
-      .filter({ hasText: labelPattern })
-      .first();
+    // Use data-testid for reliable selection:
+    //   "thinking" → data-testid="model-switcher-gpt-5-4-thinking"
+    //   "auto"     → data-testid="model-switcher-gpt-5-3"
+    const testIdMap: Record<string, string> = {
+      thinking: "model-switcher-gpt-5-4-thinking",
+      auto: "model-switcher-gpt-5-3",
+    };
+    const testId = testIdMap[model] ?? testIdMap["thinking"];
+    const option = page.locator(`[data-testid="${testId}"]`);
     const optionVisible = await option.isVisible().catch(() => false);
     if (!optionVisible) {
       await page.keyboard.press("Escape").catch(() => {});
-      log.info(`ChatGPT: model option not found for "${model}"`);
+      log.info(`ChatGPT: model option not found for "${model}" (testId: ${testId})`);
       return;
     }
 
