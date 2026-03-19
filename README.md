@@ -1,6 +1,6 @@
-# llm-council-mcp
+# llm-browser-multicast-mcp
 
-複数の AI モデル (ChatGPT, Gemini, Claude, Grok) をブラウザ自動操作で同時に活用し、議論・討論・合議を行う MCP サーバー。
+複数の AI モデル (ChatGPT, Gemini, Claude, Grok) にブラウザ経由で一括送信し、議論・討論・合議を行う MCP サーバー。
 
 ## Features
 
@@ -14,7 +14,7 @@
 ## Installation
 
 ```bash
-npm install -g llm-council-mcp
+npm install -g llm-browser-multicast-mcp
 
 # Chromium ブラウザのインストール（必須）
 npx playwright install chromium
@@ -31,7 +31,7 @@ Claude Code の場合:
   "mcpServers": {
     "llm-council": {
       "command": "npx",
-      "args": ["-y", "llm-council-mcp"]
+      "args": ["-y", "llm-browser-multicast-mcp"]
     }
   }
 }
@@ -109,7 +109,7 @@ npx playwright install chromium
 Web UI の DOM 構造が変更された可能性があります。パッケージを最新版にアップデートしてください:
 
 ```bash
-npm update -g llm-council-mcp
+npm update -g llm-browser-multicast-mcp
 ```
 
 ### タイムアウトする

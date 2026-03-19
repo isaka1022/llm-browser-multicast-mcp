@@ -1,13 +1,13 @@
 {
-  "name": "llm-council-mcp",
+  "name": "llm-browser-multicast-mcp",
   "version": "0.1.0",
   "description": "Multi-LLM council discussion MCP server via browser automation",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "llm-council-mcp": "dist/index.js",
-    "llm-council-viewer": "dist/viewer/server.js"
+    "llm-browser-multicast-mcp": "dist/index.js",
+    "llm-browser-multicast-viewer": "dist/viewer/server.js"
   },
   "files": [
     "dist/",
@@ -29,8 +29,10 @@
     "mcp",
     "mcp-server",
     "llm",
-    "council",
+    "multicast",
+    "browser",
     "multi-model",
+    "council",
     "debate",
     "roundtable",
     "playwright"
@@ -38,7 +40,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/amane/llm-council-mcp.git"
+    "url": "git+https://github.com/isaka1022/llm-browser-multicast-mcp.git"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

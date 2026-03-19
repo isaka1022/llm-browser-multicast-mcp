@@ -21,7 +21,7 @@ async function main() {
   const registry = new ProviderRegistry(config);
 
   const server = new McpServer({
-    name: "llm-council",
+    name: "llm-browser-multicast",
     version: "0.1.0",
   });
 
