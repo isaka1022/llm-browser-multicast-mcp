@@ -1,21 +1,45 @@
 {
-  "name": "llm-council",
+  "name": "llm-council-mcp",
   "version": "0.1.0",
-  "description": "Multi-LLM council discussion MCP server",
+  "description": "Multi-LLM council discussion MCP server via browser automation",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "llm-council-mcp": "dist/index.js",
+    "llm-council-viewer": "dist/viewer/server.js"
+  },
+  "files": [
+    "dist/",
+    "council.config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
-    "viewer": "tsx src/viewer/server.ts"
+    "viewer": "node dist/viewer/server.js",
+    "dev": "tsx src/index.ts"
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "llm",
     "council",
-    "multi-model"
+    "multi-model",
+    "debate",
+    "roundtable",
+    "playwright"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amane/llm-council-mcp.git"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "playwright": "^1.58.2",

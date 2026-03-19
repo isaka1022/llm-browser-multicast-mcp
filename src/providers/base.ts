@@ -1,82 +1,10 @@
-import type { ChatMessage, ModelResponse, TokenUsage } from "../types.js";
+import type { ChatMessage, ModelResponse } from "../types.js";
+
+export interface ChatOptions {
+  resumeUrl?: string;
+}
 
 export interface LLMProvider {
-  chat(model: string, messages: ChatMessage[], timeoutMs: number): Promise<ModelResponse>;
+  chat(model: string, messages: ChatMessage[], timeoutMs: number, options?: ChatOptions): Promise<ModelResponse>;
   listModels(): Promise<string[]>;
-}
-
-interface OpenAICompletionResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-  };
-}
-
-export class OpenAICompatibleProvider implements LLMProvider {
-  constructor(
-    private readonly providerName: string,
-    private readonly baseUrl: string,
-    private readonly headers: Record<string, string> = {},
-  ) {}
-
-  async chat(
-    model: string,
-    messages: ChatMessage[],
-    timeoutMs: number,
-  ): Promise<ModelResponse> {
-    const start = Date.now();
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...this.headers,
-      },
-      body: JSON.stringify({ model, messages }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(
-        `${this.providerName} API error ${response.status}: ${body}`,
-      );
-    }
-
-    const data = (await response.json()) as OpenAICompletionResponse;
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error(`${this.providerName}: empty response`);
-    }
-
-    const usage: TokenUsage | undefined = data.usage
-      ? {
-          inputTokens: data.usage.prompt_tokens,
-          outputTokens: data.usage.completion_tokens,
-          estimated: false,
-        }
-      : undefined;
-
-    return {
-      model: `${this.providerName}/${model}`,
-      content,
-      durationMs: Date.now() - start,
-      usage,
-    };
-  }
-
-  async listModels(): Promise<string[]> {
-    const response = await fetch(`${this.baseUrl}/v1/models`, {
-      headers: this.headers,
-    });
-    if (!response.ok) return [];
-    const data = (await response.json()) as {
-      data: Array<{ id: string }>;
-    };
-    return data.data.map((m) => `${this.providerName}/${m.id}`);
-  }
 }

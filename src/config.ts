@@ -1,16 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 import { z } from "zod/v4";
 import type { CouncilConfig, ProviderType } from "./types.js";
 import { log } from "./logger.js";
 
 const PROVIDER_TYPES: ProviderType[] = [
-  "anthropic",
-  "gemini-api",
-  "grok-api",
-  "gemini-cli",
-  "codex-cli",
-  "claude-cli",
   "chatgpt-web",
   "gemini-web",
   "claude-web",
@@ -19,12 +14,9 @@ const PROVIDER_TYPES: ProviderType[] = [
 
 const ProviderConfigSchema = z.object({
   type: z.enum(PROVIDER_TYPES as [ProviderType, ...ProviderType[]]),
-  baseUrl: z.string().optional(),
-  apiKey: z.string().optional(),
   models: z.array(z.string()),
-  // Playwright provider options
   service: z.enum(["chatgpt", "gemini", "claude", "grok"]).optional(),
-  storageStatePath: z.string().optional(),
+  profileDir: z.string().optional(),
   headless: z.boolean().optional(),
 });
 
@@ -37,63 +29,81 @@ const CouncilConfigSchema = z.object({
 
 const DEFAULT_CONFIG: CouncilConfig = {
   providers: {
-    "gemini-cli": {
-      type: "gemini-cli",
-      models: ["default"],
+    chatgpt: {
+      type: "chatgpt-web",
+      models: ["gpt-4o"],
     },
-    "claude-cli": {
-      type: "claude-cli",
-      models: ["default"],
+    gemini: {
+      type: "gemini-web",
+      models: ["gemini-2.5-pro"],
     },
-    "codex-cli": {
-      type: "codex-cli",
-      models: ["default"],
+    claude: {
+      type: "claude-web",
+      models: ["claude-sonnet-4"],
+    },
+    grok: {
+      type: "grok-web",
+      models: ["grok-3"],
     },
   },
   defaultModels: [
-    "gemini-cli/default",
-    "claude-cli/default",
-    "codex-cli/default",
+    "chatgpt/gpt-4o",
+    "gemini/gemini-2.5-pro",
+    "claude/claude-sonnet-4",
   ],
-  chairman: "gemini-cli/default",
+  chairman: "claude/claude-sonnet-4",
   timeoutMs: 300_000,
 };
 
-function resolveEnvVars(value: string): string {
-  return value.replace(/\$\{(\w+)\}/g, (_, envName: string) => {
-    const resolved = process.env[envName];
-    if (resolved === undefined) {
-      log.error(`Environment variable ${envName} is not defined`);
-      return "";
-    }
-    return resolved;
-  });
+function resolveConfigPath(): string | undefined {
+  // 1. Explicit env var
+  const envPath = process.env.COUNCIL_CONFIG;
+  if (envPath) return resolve(envPath);
+
+  // 2. CWD
+  const cwdPath = resolve(process.cwd(), "council.config.json");
+
+  // 3. XDG / global config
+  const globalPath = resolve(homedir(), ".config", "llm-council", "config.json");
+
+  // Return first that might exist (actual existence checked in loadConfig)
+  return cwdPath;
 }
 
-function resolveConfigEnvVars(config: CouncilConfig): CouncilConfig {
-  for (const provider of Object.values(config.providers)) {
-    if (provider.apiKey) {
-      provider.apiKey = resolveEnvVars(provider.apiKey);
-    }
-    if (provider.baseUrl) {
-      provider.baseUrl = resolveEnvVars(provider.baseUrl);
-    }
+async function tryReadConfig(configPath: string): Promise<string | undefined> {
+  try {
+    return await readFile(configPath, "utf-8");
+  } catch {
+    return undefined;
   }
-  return config;
 }
 
 export async function loadConfig(): Promise<CouncilConfig> {
-  const configPath = resolve(process.cwd(), "council.config.json");
-  try {
-    const raw = await readFile(configPath, "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    const userConfig = CouncilConfigSchema.partial().parse(parsed);
-    const merged: CouncilConfig = { ...DEFAULT_CONFIG, ...userConfig } as CouncilConfig;
-    return resolveConfigEnvVars(merged);
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      log.error(`Invalid config: ${err.issues.map((i) => i.message).join(", ")}`);
+  const candidates = [
+    process.env.COUNCIL_CONFIG ? resolve(process.env.COUNCIL_CONFIG) : undefined,
+    resolve(process.cwd(), "council.config.json"),
+    resolve(homedir(), ".config", "llm-council", "config.json"),
+  ].filter((p): p is string => p !== undefined);
+
+  for (const configPath of candidates) {
+    const raw = await tryReadConfig(configPath);
+    if (!raw) continue;
+
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const userConfig = CouncilConfigSchema.partial().parse(parsed);
+      const merged: CouncilConfig = { ...DEFAULT_CONFIG, ...userConfig } as CouncilConfig;
+      log.info(`Config loaded from ${configPath}`);
+      return merged;
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        log.error(`Invalid config at ${configPath}: ${err.issues.map((i) => i.message).join(", ")}`);
+      } else {
+        log.error(`Failed to parse config at ${configPath}: ${err}`);
+      }
     }
-    return DEFAULT_CONFIG;
   }
+
+  log.info("No config file found, using defaults");
+  return DEFAULT_CONFIG;
 }

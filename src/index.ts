@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v4";
@@ -10,6 +11,10 @@ import { formatCouncilResult, formatRoundtableResult, formatDebateResult, format
 import { PlaywrightProvider } from "./providers/playwright/playwright-provider.js";
 import { log } from "./logger.js";
 import { EventLogger } from "./event-logger.js";
+
+// Session store: session_id → { model, pageUrl }
+// Keeps conversation URLs in memory so follow-up questions can resume the same thread
+const sessionStore = new Map<string, { model: string; pageUrl: string }>();
 
 async function main() {
   const config = await loadConfig();
@@ -227,8 +232,16 @@ async function main() {
         .string()
         .optional()
         .describe("Optional context from previous discussion to include"),
+      session_id: z
+        .string()
+        .optional()
+        .describe(
+          "Session ID to resume a previous conversation (Web UI providers only). " +
+          "If provided and a URL exists for this session, the follow-up message will be sent in the same chat thread. " +
+          "Use a consistent ID (e.g. topic slug) to group related questions.",
+        ),
     },
-    async ({ model, prompt, context }) => {
+    async ({ model, prompt, context, session_id }) => {
       try {
         const messages = [];
         if (context) {
@@ -239,13 +252,23 @@ async function main() {
         }
         messages.push({ role: "user" as const, content: prompt });
 
-        const response = await registry.chat(model, messages);
+        // Resolve resumeUrl from sessionStore if session_id is given
+        const session = session_id ? sessionStore.get(session_id) : undefined;
+        const resumeUrl = session?.model === model ? session.pageUrl : undefined;
 
+        const response = await registry.chat(model, messages, resumeUrl ? { resumeUrl } : undefined);
+
+        // Save/update session URL if session_id was given and provider returned a pageUrl
+        if (session_id && response.pageUrl) {
+          sessionStore.set(session_id, { model, pageUrl: response.pageUrl });
+        }
+
+        const urlLine = response.pageUrl ? `\n\n[会話URL: ${response.pageUrl}]` : "";
         return {
           content: [
             {
               type: "text" as const,
-              text: `**${response.model}** (${response.durationMs}ms):\n\n${response.content}`,
+              text: `**${response.model}** (${response.durationMs}ms):${urlLine}\n\n${response.content}`,
             },
           ],
         };

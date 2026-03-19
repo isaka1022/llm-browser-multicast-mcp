@@ -1,0 +1,27 @@
+{
+  "providers": {
+    "chatgpt": {
+      "type": "chatgpt-web",
+      "models": ["gpt-4o"]
+    },
+    "gemini": {
+      "type": "gemini-web",
+      "models": ["gemini-2.5-pro"]
+    },
+    "claude": {
+      "type": "claude-web",
+      "models": ["claude-sonnet-4"]
+    },
+    "grok": {
+      "type": "grok-web",
+      "models": ["grok-3"]
+    }
+  },
+  "defaultModels": [
+    "chatgpt/gpt-4o",
+    "gemini/gemini-2.5-pro",
+    "claude/claude-sonnet-4"
+  ],
+  "chairman": "claude/claude-sonnet-4",
+  "timeoutMs": 300000
+}

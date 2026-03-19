@@ -66,6 +66,7 @@ export class PlaywrightProvider implements LLMProvider {
     model: string,
     messages: ChatMessage[],
     timeoutMs: number,
+    options?: { resumeUrl?: string },
   ): Promise<ModelResponse> {
     await this.acquireLock();
 
@@ -73,9 +74,26 @@ export class PlaywrightProvider implements LLMProvider {
       const start = Date.now();
       const prompt = messagesToPrompt(messages);
 
-      // First call: open page and start new chat
-      // Subsequent calls: reuse existing page (same tab / conversation)
-      if (!this.persistentPage || this.persistentPage.isClosed()) {
+      if (options?.resumeUrl) {
+        // Resume an existing conversation by navigating to the saved URL
+        if (!this.persistentPage || this.persistentPage.isClosed()) {
+          const page = await this.browserManager.newPage();
+          const loggedIn = await this.adapter.isLoggedIn(page);
+          if (!loggedIn) {
+            await page.close().catch(() => {});
+            throw new Error(
+              `${this.providerName}: not logged in. ` +
+                `Run with headless: false to log in manually, then restart.`,
+            );
+          }
+          this.persistentPage = page;
+        }
+        await this.persistentPage.goto(options.resumeUrl, {
+          waitUntil: "domcontentloaded",
+        });
+        await this.persistentPage.waitForTimeout(2_000);
+      } else if (!this.persistentPage || this.persistentPage.isClosed()) {
+        // First call: open page and start new chat
         const page = await this.browserManager.newPage();
         await this.adapter.navigateToChat(page);
 
@@ -130,6 +148,7 @@ export class PlaywrightProvider implements LLMProvider {
         content,
         durationMs: Date.now() - start,
         usage,
+        pageUrl: this.persistentPage.url(),
       };
     } catch (error) {
       log.error(

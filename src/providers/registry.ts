@@ -1,8 +1,5 @@
 import type { CouncilConfig, ChatMessage, ModelResponse, ModelResult } from "../types.js";
 import type { LLMProvider } from "./base.js";
-import { OpenAICompatibleProvider } from "./base.js";
-import { AnthropicProvider } from "./anthropic.js";
-import { createGeminiCLI, createCodexCLI, createClaudeCLI } from "./cli.js";
 import { PlaywrightProvider } from "./playwright/playwright-provider.js";
 import { log } from "../logger.js";
 
@@ -17,91 +14,27 @@ export class ProviderRegistry {
     for (const [name, providerConfig] of Object.entries(
       this.config.providers,
     )) {
-      switch (providerConfig.type) {
-        case "anthropic":
-          this.providers.set(
-            name,
-            new AnthropicProvider(
-              providerConfig.apiKey ?? "",
-              providerConfig.baseUrl,
-            ),
-          );
-          break;
-        case "gemini-api":
-          this.providers.set(
-            name,
-            new OpenAICompatibleProvider(
-              name,
-              providerConfig.baseUrl ??
-                "https://generativelanguage.googleapis.com/v1beta/openai",
-              {
-                Authorization: `Bearer ${providerConfig.apiKey ?? ""}`,
-              },
-            ),
-          );
-          break;
-        case "grok-api":
-          this.providers.set(
-            name,
-            new OpenAICompatibleProvider(
-              name,
-              providerConfig.baseUrl ?? "https://api.x.ai",
-              {
-                Authorization: `Bearer ${providerConfig.apiKey ?? ""}`,
-              },
-            ),
-          );
-          break;
-        case "gemini-cli":
-          this.providers.set(name, createGeminiCLI());
-          break;
-        case "codex-cli":
-          this.providers.set(name, createCodexCLI());
-          break;
-        case "claude-cli":
-          this.providers.set(name, createClaudeCLI());
-          break;
-        case "chatgpt-web":
-          this.providers.set(
-            name,
-            new PlaywrightProvider({
-              service: providerConfig.service ?? "chatgpt",
-              profileDir: providerConfig.profileDir,
-              headless: providerConfig.headless,
-            }),
-          );
-          break;
-        case "gemini-web":
-          this.providers.set(
-            name,
-            new PlaywrightProvider({
-              service: providerConfig.service ?? "gemini",
-              profileDir: providerConfig.profileDir,
-              headless: providerConfig.headless,
-            }),
-          );
-          break;
-        case "claude-web":
-          this.providers.set(
-            name,
-            new PlaywrightProvider({
-              service: providerConfig.service ?? "claude",
-              profileDir: providerConfig.profileDir,
-              headless: providerConfig.headless,
-            }),
-          );
-          break;
-        case "grok-web":
-          this.providers.set(
-            name,
-            new PlaywrightProvider({
-              service: providerConfig.service ?? "grok",
-              profileDir: providerConfig.profileDir,
-              headless: providerConfig.headless,
-            }),
-          );
-          break;
+      const serviceMap: Record<string, string> = {
+        "chatgpt-web": "chatgpt",
+        "gemini-web": "gemini",
+        "claude-web": "claude",
+        "grok-web": "grok",
+      };
+
+      const service = providerConfig.service ?? serviceMap[providerConfig.type];
+      if (!service) {
+        log.error(`Unknown provider type: ${providerConfig.type}`);
+        continue;
       }
+
+      this.providers.set(
+        name,
+        new PlaywrightProvider({
+          service: service as "chatgpt" | "gemini" | "claude" | "grok",
+          profileDir: providerConfig.profileDir,
+          headless: providerConfig.headless,
+        }),
+      );
     }
   }
 
@@ -126,9 +59,10 @@ export class ProviderRegistry {
   async chat(
     modelId: string,
     messages: ChatMessage[],
+    options?: { resumeUrl?: string },
   ): Promise<ModelResponse> {
     const { provider, model } = this.resolve(modelId);
-    return provider.chat(model, messages, this.config.timeoutMs);
+    return provider.chat(model, messages, this.config.timeoutMs, options);
   }
 
   async chatParallel(

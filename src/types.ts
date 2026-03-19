@@ -14,6 +14,8 @@ export interface ModelResponse {
   content: string;
   durationMs: number;
   usage?: TokenUsage;
+  /** URL of the web UI conversation (Playwright providers only) */
+  pageUrl?: string;
 }
 
 export interface ModelError {
@@ -66,12 +68,6 @@ export interface RoundtableResult {
 }
 
 export type ProviderType =
-  | "anthropic"
-  | "gemini-api"
-  | "grok-api"
-  | "gemini-cli"
-  | "codex-cli"
-  | "claude-cli"
   | "chatgpt-web"
   | "gemini-web"
   | "claude-web"
@@ -79,10 +75,7 @@ export type ProviderType =
 
 export interface ProviderConfig {
   type: ProviderType;
-  baseUrl?: string;
-  apiKey?: string;
   models: string[];
-  // Playwright provider options
   service?: "chatgpt" | "gemini" | "claude" | "grok";
   profileDir?: string;
   headless?: boolean;
