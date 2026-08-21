@@ -2,6 +2,11 @@
   "name": "llm-browser-multicast-mcp",
   "version": "0.1.0",
   "description": "Multi-LLM council discussion MCP server via browser automation",
+  "author": "Amane INOUE",
+  "homepage": "https://github.com/isaka1022/llm-browser-multicast-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/isaka1022/llm-browser-multicast-mcp/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

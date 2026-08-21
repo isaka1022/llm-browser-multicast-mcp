@@ -7,3 +7,6 @@ debug-*.png
 .playwright-mcp/
 .vscode/
 Flow/
+
+# npm pack output
+*.tgz
